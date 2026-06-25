@@ -89,7 +89,7 @@ describe('LLMProvider', () => {
         .mockRejectedValueOnce(error500)
         .mockResolvedValueOnce(mockResponse);
 
-      (axios.isAxiosError as jest.Mock).mockReturnValue(true);
+      (axios.isAxiosError as unknown as jest.Mock).mockReturnValue(true);
 
       const result = await llmProvider.generate('Тест');
 
@@ -105,7 +105,7 @@ describe('LLMProvider', () => {
       };
 
       mockAxiosInstance.post.mockRejectedValue(timeoutError);
-      (axios.isAxiosError as jest.Mock).mockReturnValue(true);
+      (axios.isAxiosError as unknown as jest.Mock).mockReturnValue(true);
 
       await expect(llmProvider.generate('Тест')).rejects.toThrow(NetworkError);
       expect(mockAxiosInstance.post).toHaveBeenCalledTimes(3); // maxRetries = 3
@@ -121,7 +121,7 @@ describe('LLMProvider', () => {
       };
 
       mockAxiosInstance.post.mockRejectedValue(error429);
-      (axios.isAxiosError as jest.Mock).mockReturnValue(true);
+      (axios.isAxiosError as unknown as jest.Mock).mockReturnValue(true);
 
       await expect(llmProvider.generate('Тест')).rejects.toThrow(LLMError);
     });
