@@ -2,10 +2,32 @@
 (function () {
   // @ts-ignore
   const vscode = acquireVsCodeApi();
+
+    console.log('vscode API:', typeof vscode !== 'undefined');
   
-  const messageInput = document.getElementById('messageInput');
+  
+  if (typeof hljs === 'undefined') {
+    console.error('ERROR: hljs library not loaded!');
+  }
+
+const messageInput = document.getElementById('messageInput');
+  
+  const clearButton = document.querySelector('.header-actions button[title="Очистить историю"]');
+  if (clearButton) {
+    clearButton.addEventListener('click', clearHistory);
+  }
+  
   const sendButton = document.getElementById('sendButton');
   const messagesArea = document.getElementById('messagesArea');
+
+  
+  // Загружаем историю из state
+  const savedState = vscode.getState();
+  if (savedState && savedState.messages) {
+    savedState.messages.forEach(msg => {
+      addMessage(msg.role, msg.content, false);
+    });
+  }
 
   // Инициализация marked
   if (typeof marked !== 'undefined') {
@@ -88,6 +110,10 @@
     if (role === 'assistant') {
       addCopyButtons(messageDiv);
     }
+    // Сохраняем сообщение в state
+    const currentState = vscode.getState() || { messages: [] };
+    currentState.messages.push({ role, content });
+    vscode.setState(currentState);
   }
 
   function addCopyButtons(messageDiv) {
@@ -158,4 +184,15 @@
         break;
     }
   });
+
+  
+
+
+  function clearHistory() {
+    vscode.setState({ messages: [] });
+    messagesArea.innerHTML = '';
+    // Добавляем приветственное сообщение
+    addMessage('assistant', 'Привет! Я Devil — твой интеллектуальный ассистент для разработки. Я могу помочь с генерацией кода, объяснением, рефакторингом и анализом проекта.', false);
+  }
+
 })();
