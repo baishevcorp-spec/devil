@@ -2,6 +2,17 @@ import * as vscode from 'vscode';
 import { logger } from '../utils/logger';
 
 /**
+ * Сообщение от Webview к Extension.
+ */
+export interface WebviewMessage {
+  type: string;
+  content?: string;
+  text?: string;
+  [key: string]: unknown;
+}
+
+
+/**
  * ChatPanel — управляет Webview-панелью чата.
  * 
  * Отвечает за:
@@ -55,7 +66,7 @@ export class ChatPanel {
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
 
     this._panel.webview.onDidReceiveMessage(
-      (message) => {
+      (message: WebviewMessage) => {
         switch (message.type) {
           case 'userMessage':
             logger.info('Получено сообщение от пользователя: ' + message.content, 'ChatPanel');
@@ -75,7 +86,7 @@ export class ChatPanel {
   /**
    * Отправляет сообщение в Webview.
    */
-  public sendMessage(message: any): void {
+  public sendMessage(message: WebviewMessage): void {
     this._panel.webview.postMessage(message);
   }
 
