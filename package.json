@@ -47,7 +47,7 @@
     "axios": "^1.18.1"
   },
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.125.0"
   },
   "displayName": "Devil — AI Assistant for Developers",
   "publisher": "baish",
