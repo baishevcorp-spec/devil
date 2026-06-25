@@ -72,7 +72,9 @@ export class ChatPanel {
             logger.info('Получено сообщение от пользователя: ' + message.content, 'ChatPanel');
             break;
           case 'alert':
-            vscode.window.showErrorMessage(message.text);
+            if (message.text) {
+              vscode.window.showErrorMessage(message.text);
+            }
             return;
         }
       },
