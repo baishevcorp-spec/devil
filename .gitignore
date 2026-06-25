@@ -1,0 +1,26 @@
+# Зависимости
+node_modules/
+package-lock.json
+
+# Сборка
+out/
+dist/
+*.vsix
+
+# IDE
+.vscode-test/
+*.code-workspace
+
+# ОС
+.DS_Store
+Thumbs.db
+
+# Данные проекта (не коммитим в репозиторий расширения)
+.devil/
+
+# Бэкапы
+backups/
+
+# Логи
+*.log
+npm-debug.log*
