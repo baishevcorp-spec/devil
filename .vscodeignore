@@ -1,0 +1,43 @@
+# Исходники TypeScript (в пакет идёт только скомпилированный JS из out/)
+src/**
+tests/**
+*.ts
+!*.d.ts
+
+# Инструменты разработки
+.eslintrc.json
+.prettierrc
+.prettierignore
+jest.config.js
+tsconfig.json
+.gitignore
+.vscode-test/**
+
+# Бэкапы и временные файлы
+backups/**
+*.log
+*.bak
+
+# Данные проекта (не коммитим в расширение)
+.devil/**
+
+# Документация разработки (не пользовательская)
+docs/**
+!README.md
+!CHANGELOG.md
+
+# Git
+.git/**
+.gitignore
+
+# Node modules (vsce сам упакует production-зависимости)
+node_modules/**
+!node_modules/axios/**
+
+# Coverage
+coverage/**
+
+# Прочее
+*.map
+.DS_Store
+Thumbs.db

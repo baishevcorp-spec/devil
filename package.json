@@ -1,7 +1,7 @@
 {
   "name": "devil",
-  "version": "1.0.0",
-  "description": "",
+  "version": "0.1.0",
+  "description": "Интеллектуальный агент-ассистент для VS Code с долговременной памятью, графовой БД и интеграцией с LLM.",
   "main": "./out/extension.js",
   "directories": {
     "doc": "docs",
@@ -21,10 +21,15 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
   },
-  "keywords": [],
+  "keywords": [
+    "ai",
+    "assistant",
+    "llm",
+    "code generation",
+    "memory"
+  ],
   "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "license": "MIT",
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "@types/node": "^20.19.43",
@@ -43,5 +48,60 @@
   },
   "engines": {
     "vscode": "^1.85.0"
+  },
+  "displayName": "Devil — AI Assistant for Developers",
+  "publisher": "baish",
+  "categories": [
+    "Machine Learning",
+    "Programming Languages",
+    "Other"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/baish/devil"
+  },
+  "activationEvents": [
+    "onCommand:devil.hello",
+    "onCommand:devil.openChat",
+    "onCommand:devil.openProject"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "devil.hello",
+        "title": "Devil: Hello (тестовая команда)",
+        "category": "Devil"
+      },
+      {
+        "command": "devil.openChat",
+        "title": "Devil: Open Chat",
+        "category": "Devil"
+      },
+      {
+        "command": "devil.openProject",
+        "title": "Devil: Open Project",
+        "category": "Devil"
+      }
+    ],
+    "configuration": {
+      "title": "Devil",
+      "properties": {
+        "devil.baseUrl": {
+          "type": "string",
+          "default": "https://api.myproxyapi.ru/v1",
+          "description": "Base URL для LLM API (OpenAI-совместимый)"
+        },
+        "devil.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API ключ для LLM (хранится в настройках VS Code)"
+        },
+        "devil.model": {
+          "type": "string",
+          "default": "gpt-4o-mini",
+          "description": "Модель LLM по умолчанию"
+        }
+      }
+    }
   }
 }
