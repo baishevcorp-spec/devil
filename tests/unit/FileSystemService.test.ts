@@ -3,8 +3,6 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 
-// Мок модуля 'vscode' через moduleNameMapper в jest.config.js
-jest.mock('vscode', () => require('../__mocks__/vscode'), { virtual: true });
 
 describe('FileSystemService', () => {
   let fsService: FileSystemService;
