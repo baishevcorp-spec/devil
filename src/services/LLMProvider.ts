@@ -122,6 +122,8 @@ export class LLMProvider implements ILLMProvider {
     logger.info(`Отправка streaming-запроса к LLM (модель: ${this.currentModel})`, 'LLMProvider');
 
     try {
+      logger.info('Отправка запроса на URL: ' + this.currentBaseUrl + '/chat/completions', 'LLMProvider');
+      logger.info('Модель: ' + this.currentModel, 'LLMProvider');
       const response = await this.axiosInstance.post(
         `${this.currentBaseUrl}/chat/completions`,
         {
