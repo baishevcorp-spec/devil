@@ -9,6 +9,10 @@ type ConfigStore = Record<string, any>;
 
 const configStore: ConfigStore = {};
 
+export class RelativePattern {
+  constructor(public base: string, public pattern: string) {}
+}
+
 export const workspace = {
   getConfiguration: (section?: string) => {
     return {
@@ -19,7 +23,13 @@ export const workspace = {
       update: jest.fn()
     };
   },
-  onDidChangeConfiguration: jest.fn(() => ({ dispose: jest.fn() }))
+  onDidChangeConfiguration: jest.fn(() => ({ dispose: jest.fn() })),
+  createFileSystemWatcher: jest.fn(() => ({
+    onDidCreate: jest.fn(() => ({ dispose: jest.fn() })),
+    onDidChange: jest.fn(() => ({ dispose: jest.fn() })),
+    onDidDelete: jest.fn(() => ({ dispose: jest.fn() })),
+    dispose: jest.fn()
+  }))
 };
 
 export const window = {

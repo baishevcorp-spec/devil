@@ -107,11 +107,17 @@ describe('FileSystemService', () => {
 
       const tree = await fsService.scanDirectory(testDir, { maxDepth: 2 });
 
-      // На глубине 2 директория 'a' должна быть, но без детей
+      // На глубине 2 директория 'a' должна иметь ребёнка 'b'
       const dirA = tree.children!.find((c) => c.name === 'a');
       expect(dirA).toBeDefined();
       expect(dirA!.children).toBeDefined();
-      expect(dirA!.children!.length).toBe(0); // Глубина ограничена
+      expect(dirA!.children!.length).toBeGreaterThan(0); // У 'a' есть ребёнок 'b'
+
+      // Но у 'b' (глубина 2) уже не должно быть детей
+      const dirB = dirA!.children!.find((c) => c.name === 'b');
+      expect(dirB).toBeDefined();
+      expect(dirB!.children).toBeDefined();
+      expect(dirB!.children!.length).toBe(0); // Глубина ограничена
     });
 
     it('включает содержимое файлов, если includeContent = true', async () => {
