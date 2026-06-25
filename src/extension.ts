@@ -1,29 +1,91 @@
 import * as vscode from 'vscode';
+import { ConfigManager } from './services/ConfigManager';
+import { FileSystemService } from './services/FileSystemService';
+import { ProjectManager } from './services/ProjectManager';
+import { logger } from './utils/logger';
+
+/**
+ * Глобальные экземпляры сервисов.
+ */
+let configManager: ConfigManager;
+let fileSystemService: FileSystemService;
+let projectManager: ProjectManager;
 
 /**
  * Точка входа расширения Devil.
  * Вызывается VS Code при активации расширения.
- *
- * На данном этапе (Sprint 0) — минимальный скелет.
- * В Sprint 1 здесь будут зарегистрированы команды:
- *   - devil.openChat
- *   - devil.openProject
  */
 export function activate(context: vscode.ExtensionContext): void {
-  console.log('Devil extension is now active!');
+  logger.info('Devil extension is activating...', 'Extension');
 
-  // Временная команда для проверки активации расширения
-  const disposable = vscode.commands.registerCommand('devil.hello', () => {
-    vscode.window.showInformationMessage('Devil: расширение работает!');
-  });
+  try {
+    // Инициализируем сервисы
+    configManager = new ConfigManager();
+    configManager.initialize();
 
-  context.subscriptions.push(disposable);
+    fileSystemService = new FileSystemService();
+    projectManager = new ProjectManager(fileSystemService);
+
+    // Регистрируем команды
+    const helloCommand = vscode.commands.registerCommand('devil.hello', () => {
+      vscode.window.showInformationMessage('Devil: расширение работает!');
+    });
+
+    const openChatCommand = vscode.commands.registerCommand('devil.openChat', () => {
+      vscode.window.showInformationMessage('Devil: Open Chat (будет реализовано в UI-01)');
+    });
+
+    const openProjectCommand = vscode.commands.registerCommand('devil.openProject', async () => {
+      const result = await vscode.window.showOpenDialog({
+        canSelectFiles: false,
+        canSelectFolders: true,
+        canSelectMany: false,
+        openLabel: 'Открыть проект'
+      });
+
+      if (result && result.length > 0) {
+        const folderUri = result[0];
+        const folder = vscode.workspace.getWorkspaceFolder(folderUri);
+        
+        if (folder) {
+          await projectManager.setProject(folder);
+          const project = projectManager.getCurrentProject();
+          vscode.window.showInformationMessage(
+            `Devil: Проект "${project!.name}" открыт (${project!.fileCount} файлов)`
+          );
+        } else {
+          vscode.window.showErrorMessage('Devil: Не удалось определить workspace folder');
+        }
+      }
+    });
+
+    // Добавляем команды в subscriptions
+    context.subscriptions.push(helloCommand, openChatCommand, openProjectCommand);
+
+    // Инициализируем ProjectManager (открываем текущий проект, если есть)
+    projectManager.initialize().catch((error) => {
+      logger.error('Не удалось инициализировать ProjectManager', error, 'Extension');
+    });
+
+    // Добавляем сервисы в subscriptions для автоматической очистки
+    context.subscriptions.push(
+      new vscode.Disposable(() => {
+        configManager.dispose();
+        projectManager.dispose();
+        logger.dispose();
+      })
+    );
+
+    logger.info('Devil extension activated successfully!', 'Extension');
+  } catch (error) {
+    logger.error('Ошибка при активации расширения', error, 'Extension');
+    vscode.window.showErrorMessage('Devil: Ошибка при активации расширения. Проверьте Output Channel.');
+  }
 }
 
 /**
  * Вызывается VS Code при деактивации расширения.
- * Здесь можно освобождать ресурсы (закрыть БД, отписаться от watcher'ов).
  */
 export function deactivate(): void {
-  console.log('Devil extension deactivated.');
+  logger.info('Devil extension deactivated.', 'Extension');
 }
