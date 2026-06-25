@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
 import { logger } from '../utils/logger';
+import { LLMProvider } from '../services/LLMProvider';
+import { ContextBuilder } from '../services/ContextBuilder';
+import { ProjectManager } from '../services/ProjectManager';
 
 /**
  * Сообщение от Webview к Extension.
@@ -11,15 +14,17 @@ export interface WebviewMessage {
   [key: string]: unknown;
 }
 
+/**
+ * Сообщение от Extension к Webview.
+ */
+export interface ExtensionMessage {
+  type: 'agentResponse' | 'error';
+  content?: string;
+  text?: string;
+}
 
 /**
  * ChatPanel — управляет Webview-панелью чата.
- * 
- * Отвечает за:
- * - Создание и отображение Webview-панели
- * - Загрузку HTML/CSS/JS из webview/
- * - Настройку Content Security Policy (CSP)
- * - Обмен сообщениями между Webview и Extension (postMessage API)
  */
 export class ChatPanel {
   public static currentPanel: ChatPanel | undefined;
@@ -28,11 +33,17 @@ export class ChatPanel {
   private readonly _panel: vscode.WebviewPanel;
   private readonly _extensionUri: vscode.Uri;
   private _disposables: vscode.Disposable[] = [];
+  
+  private llmProvider: LLMProvider;
+  private contextBuilder: ContextBuilder;
+  private projectManager: ProjectManager;
 
-  /**
-   * Создаёт или показывает существующую Webview-панель.
-   */
-  public static createOrShow(extensionUri: vscode.Uri): ChatPanel {
+  public static createOrShow(
+    extensionUri: vscode.Uri,
+    llmProvider: LLMProvider,
+    contextBuilder: ContextBuilder,
+    projectManager: ProjectManager
+  ): ChatPanel {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
       : undefined;
@@ -53,30 +64,30 @@ export class ChatPanel {
       }
     );
 
-    ChatPanel.currentPanel = new ChatPanel(panel, extensionUri);
+    ChatPanel.currentPanel = new ChatPanel(panel, extensionUri, llmProvider, contextBuilder, projectManager);
     return ChatPanel.currentPanel;
   }
 
-  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
+  private constructor(
+    panel: vscode.WebviewPanel,
+    extensionUri: vscode.Uri,
+    llmProvider: LLMProvider,
+    contextBuilder: ContextBuilder,
+    projectManager: ProjectManager
+  ) {
     this._panel = panel;
     this._extensionUri = extensionUri;
+    this.llmProvider = llmProvider;
+    this.contextBuilder = contextBuilder;
+    this.projectManager = projectManager;
 
     this._update();
 
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
 
     this._panel.webview.onDidReceiveMessage(
-      (message: WebviewMessage) => {
-        switch (message.type) {
-          case 'userMessage':
-            logger.info('Получено сообщение от пользователя: ' + message.content, 'ChatPanel');
-            break;
-          case 'alert':
-            if (message.text) {
-              vscode.window.showErrorMessage(message.text);
-            }
-            return;
-        }
+      async (message: WebviewMessage) => {
+        await this._handleMessage(message);
       },
       null,
       this._disposables
@@ -85,16 +96,59 @@ export class ChatPanel {
     logger.info('ChatPanel создан', 'ChatPanel');
   }
 
-  /**
-   * Отправляет сообщение в Webview.
-   */
-  public sendMessage(message: WebviewMessage): void {
+  private async _handleMessage(message: WebviewMessage): Promise<void> {
+    switch (message.type) {
+      case 'userMessage':
+        logger.info('Получено сообщение от пользователя: ' + message.content, 'ChatPanel');
+        await this._processUserMessage(message.content || '');
+        break;
+      case 'alert':
+        if (message.text) {
+          vscode.window.showErrorMessage(message.text);
+        }
+        return;
+    }
+  }
+
+  private async _processUserMessage(content: string): Promise<void> {
+    try {
+      // Строим контекст
+      const context = await this.contextBuilder.buildContext(content, {
+        includeProjectStructure: true,
+        includeRoadmap: true,
+        includeChecklist: true,
+        includeMemoryGraph: false // Пока не реализовано
+      });
+
+      logger.info('Контекст построен (длина: ' + context.systemPrompt.length + ' символов)', 'ChatPanel');
+
+      // Отправляем запрос к LLM
+      const response = await this.llmProvider.generate(content, {
+        systemPrompt: context.systemPrompt
+      });
+
+      logger.info('Получен ответ от LLM (токенов: ' + response.tokensUsed + ')', 'ChatPanel');
+
+      // Отправляем ответ в Webview
+      this.sendMessage({
+        type: 'agentResponse',
+        content: response.content
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('Ошибка при обработке сообщения', error, 'ChatPanel');
+      
+      this.sendMessage({
+        type: 'error',
+        text: errorMessage
+      });
+    }
+  }
+
+  public sendMessage(message: ExtensionMessage): void {
     this._panel.webview.postMessage(message);
   }
 
-  /**
-   * Освобождает ресурсы.
-   */
   public dispose(): void {
     ChatPanel.currentPanel = undefined;
     this._panel.dispose();
@@ -194,7 +248,7 @@ function getNonce(): string {
   let text = '';
   const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   for (let i = 0; i < 32; i++) {
-    text += possible.charAt(Math.floor(Math.random() * possible.length));
+    text += possible.charAt(Math.random() * possible.length);
   }
   return text;
 }
