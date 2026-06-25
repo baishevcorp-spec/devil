@@ -155,7 +155,7 @@ export class LLMProvider implements ILLMProvider {
                 yield content;
               }
             } catch (error) {
-              logger.warn('Не удалось распарсить chunk', error, 'LLMProvider');
+              logger.warn('Не удалось распарсить chunk: ' + (error instanceof Error ? error.message : String(error)), 'LLMProvider');
             }
           }
         }

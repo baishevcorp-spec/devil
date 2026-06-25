@@ -29,6 +29,18 @@ export function activate(context: vscode.ExtensionContext): void {
     projectManager = new ProjectManager(fileSystemService);
     llmProvider = new LLMProvider(configManager);
 
+    // Временная команда для тестирования LLM (будет удалена в Sprint 2)
+    const testLLMCommand = vscode.commands.registerCommand('devil.testLLM', async () => {
+      try {
+        vscode.window.showInformationMessage('Devil: Тестирование LLM...');
+        const response = await llmProvider.generate('Привет! Скажи "Привет, мир!" одним предложением.');
+        vscode.window.showInformationMessage(`Devil LLM ответ: ${response.content.substring(0, 100)}...`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Devil LLM ошибка: ${message}`);
+      }
+    });
+
     // Регистрируем команды
     const helloCommand = vscode.commands.registerCommand('devil.hello', () => {
       vscode.window.showInformationMessage('Devil: расширение работает!');
@@ -63,7 +75,7 @@ export function activate(context: vscode.ExtensionContext): void {
     });
 
     // Добавляем команды в subscriptions
-    context.subscriptions.push(helloCommand, openChatCommand, openProjectCommand);
+    context.subscriptions.push(helloCommand, openChatCommand, openProjectCommand, testLLMCommand);
 
     // Инициализируем ProjectManager (открываем текущий проект, если есть)
     projectManager.initialize().catch((error) => {
