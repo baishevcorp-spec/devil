@@ -1,6 +1,7 @@
 import { ProjectManager, ProjectInfo } from './ProjectManager';
+import * as path from 'path';
 import { FileSystemService, FileTree } from './FileSystemService';
-import { IMemoryStore, GraphNode, GraphEdge } from '../interfaces/IMemoryStore';
+import { IMemoryStore } from '../interfaces/IMemoryStore';
 import { logger } from '../utils/logger';
 
 /**
