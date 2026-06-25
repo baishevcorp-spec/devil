@@ -4,26 +4,19 @@ import { FileSystemService } from './services/FileSystemService';
 import { ProjectManager } from './services/ProjectManager';
 import { LLMProvider } from './services/LLMProvider';
 import { ContextBuilder } from './services/ContextBuilder';
+import { ChatPanel } from './panels/ChatPanel';
 import { logger } from './utils/logger';
 
-/**
- * Глобальные экземпляры сервисов.
- */
 let configManager: ConfigManager;
 let fileSystemService: FileSystemService;
 let projectManager: ProjectManager;
 let llmProvider: LLMProvider;
 let contextBuilder: ContextBuilder;
 
-/**
- * Точка входа расширения Devil.
- * Вызывается VS Code при активации расширения.
- */
 export function activate(context: vscode.ExtensionContext): void {
   logger.info('Devil extension is activating...', 'Extension');
 
   try {
-    // Инициализируем сервисы
     configManager = new ConfigManager();
     configManager.initialize();
 
@@ -32,13 +25,12 @@ export function activate(context: vscode.ExtensionContext): void {
     llmProvider = new LLMProvider(configManager);
     contextBuilder = new ContextBuilder(projectManager, fileSystemService, null);
 
-    // Регистрируем команды
     const helloCommand = vscode.commands.registerCommand('devil.hello', () => {
       vscode.window.showInformationMessage('Devil: расширение работает!');
     });
 
     const openChatCommand = vscode.commands.registerCommand('devil.openChat', () => {
-      vscode.window.showInformationMessage('Devil: Open Chat (будет реализовано в UI-01)');
+      ChatPanel.createOrShow(context.extensionUri);
     });
 
     const openProjectCommand = vscode.commands.registerCommand('devil.openProject', async () => {
@@ -57,7 +49,7 @@ export function activate(context: vscode.ExtensionContext): void {
           await projectManager.setProject(folder);
           const project = projectManager.getCurrentProject();
           vscode.window.showInformationMessage(
-            `Devil: Проект "${project!.name}" открыт (${project!.fileCount} файлов)`
+            'Devil: Проект "' + project!.name + '" открыт (' + project!.fileCount + ' файлов)'
           );
         } else {
           vscode.window.showErrorMessage('Devil: Не удалось определить workspace folder');
@@ -65,41 +57,35 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     });
 
-    // Временная команда для тестирования LLM (будет удалена в Sprint 2)
     const testLLMCommand = vscode.commands.registerCommand('devil.testLLM', async () => {
       try {
         vscode.window.showInformationMessage('Devil: Тестирование LLM...');
         
-        // Строим контекст
         const context = await contextBuilder.buildContext('Привет! Скажи "Привет, мир!" одним предложением.', {
           includeProjectStructure: true,
           includeRoadmap: true,
           includeChecklist: true
         });
         
-        logger.info(`Контекст построен (длина: ${context.systemPrompt.length} символов)`, 'Extension');
+        logger.info('Контекст построен (длина: ' + context.systemPrompt.length + ' символов)', 'Extension');
         
-        // Отправляем запрос к LLM
         const response = await llmProvider.generate('Привет! Скажи "Привет, мир!" одним предложением.', {
           systemPrompt: context.systemPrompt
         });
         
-        vscode.window.showInformationMessage(`Devil LLM ответ: ${response.content.substring(0, 100)}...`);
+        vscode.window.showInformationMessage('Devil LLM ответ: ' + response.content.substring(0, 100) + '...');
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        vscode.window.showErrorMessage(`Devil LLM ошибка: ${message}`);
+        vscode.window.showErrorMessage('Devil LLM ошибка: ' + message);
       }
     });
 
-    // Добавляем команды в subscriptions
     context.subscriptions.push(helloCommand, openChatCommand, openProjectCommand, testLLMCommand);
 
-    // Инициализируем ProjectManager (открываем текущий проект, если есть)
     projectManager.initialize().catch((error) => {
       logger.error('Не удалось инициализировать ProjectManager', error, 'Extension');
     });
 
-    // Добавляем сервисы в subscriptions для автоматической очистки
     context.subscriptions.push(
       new vscode.Disposable(() => {
         configManager.dispose();
@@ -115,9 +101,6 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 }
 
-/**
- * Вызывается VS Code при деактивации расширения.
- */
 export function deactivate(): void {
   logger.info('Devil extension deactivated.', 'Extension');
 }

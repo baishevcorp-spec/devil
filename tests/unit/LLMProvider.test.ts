@@ -28,6 +28,11 @@ describe('LLMProvider', () => {
     // Очищаем все моки перед каждым тестом
     jest.clearAllMocks();
 
+    // Явно сбрасываем моки axios, не трогая vscode
+    (axios.create as jest.Mock).mockReset();
+    (axios.isAxiosError as unknown as jest.Mock).mockReset();
+    (axios.isAxiosError as unknown as jest.Mock).mockImplementation((error: any) => error?.isAxiosError === true);
+
     // Создаём свежий мок-инстанс для каждого теста
     mockAxiosInstance = {
       post: jest.fn(),
