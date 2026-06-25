@@ -30,7 +30,7 @@ export function activate(context: vscode.ExtensionContext): void {
     });
 
     const openChatCommand = vscode.commands.registerCommand('devil.openChat', () => {
-      ChatPanel.createOrShow(context.extensionUri);
+      ChatPanel.createOrShow(context.extensionUri, llmProvider, contextBuilder, projectManager);
     });
 
     const openProjectCommand = vscode.commands.registerCommand('devil.openProject', async () => {

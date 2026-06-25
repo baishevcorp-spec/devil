@@ -60,7 +60,7 @@ export class ChatPanel {
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'webview')]
+        localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'webview'), vscode.Uri.joinPath(extensionUri, 'node_modules')]
       }
     );
 
@@ -173,6 +173,34 @@ export class ChatPanel {
     const styleUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this._extensionUri, 'webview', 'chat.css')
     );
+
+    const markedUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'marked', 'marked.min.js')
+    );
+    const highlightUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'core.js')
+    );
+    const highlightLangTypescript = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'typescript.js')
+    );
+    const highlightLangJavascript = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'javascript.js')
+    );
+    const highlightLangPython = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'python.js')
+    );
+    const highlightLangJson = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'json.js')
+    );
+    const highlightLangBash = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'bash.js')
+    );
+    const highlightLangSql = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'sql.js')
+    );
+    const highlightStylesUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'styles', 'github-dark.css')
+    );
     const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this._extensionUri, 'webview', 'chat.js')
     );
@@ -196,6 +224,7 @@ export class ChatPanel {
       '    <meta http-equiv="Content-Security-Policy" content="' + csp + '">' +
       '    <title>Devil Chat</title>' +
       '    <link rel="stylesheet" href="' + styleUri + '">' +
+      '    <link rel="stylesheet" href="' + highlightStylesUri + '">' +
       '</head>' +
       '<body>' +
       '    <div class="chat-container">' +
@@ -238,6 +267,14 @@ export class ChatPanel {
       '            </div>' +
       '        </div>' +
       '    </div>' +
+      '    <script nonce="' + nonce + '" src="' + markedUri + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightUri + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangTypescript + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangJavascript + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangPython + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangJson + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangBash + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangSql + '"></script>' +
       '    <script nonce="' + nonce + '" src="' + scriptUri + '"></script>' +
       '</body>' +
       '</html>';

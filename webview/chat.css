@@ -401,3 +401,153 @@ body {
         padding: 8px;
     }
 }
+
+/* === Code Block Wrapper === */
+.code-block-wrapper {
+  position: relative;
+  margin: 12px 0;
+}
+
+.copy-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background-color: #3e3e42;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 12px;
+  color: #d4d4d4;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+  z-index: 10;
+}
+
+.copy-button:hover {
+  background-color: #4e4e52;
+  color: #ffffff;
+}
+
+/* === Code Blocks === */
+.message-text pre {
+  background-color: #1e1e1e;
+  padding: 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 12px 0;
+  border: 1px solid #3e3e42;
+}
+
+.message-text pre code {
+  background: none;
+  padding: 0;
+  color: #d4d4d4;
+  font-size: 13px;
+  line-height: 1.6;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.message-text code {
+  background-color: #2d2d30;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  color: #ce9178;
+}
+
+/* === Highlight.js Theme Overrides === */
+.hljs {
+  background: #1e1e1e !important;
+  color: #d4d4d4 !important;
+}
+
+.hljs-keyword {
+  color: #569cd6 !important;
+}
+
+.hljs-string {
+  color: #ce9178 !important;
+}
+
+.hljs-number {
+  color: #b5cea8 !important;
+}
+
+.hljs-comment {
+  color: #6a9955 !important;
+  font-style: italic;
+}
+
+.hljs-function {
+  color: #dcdcaa !important;
+}
+
+.hljs-title {
+  color: #dcdcaa !important;
+}
+
+.hljs-params {
+  color: #9cdcfe !important;
+}
+
+.hljs-built_in {
+  color: #4ec9b0 !important;
+}
+
+.hljs-type {
+  color: #4ec9b0 !important;
+}
+
+.hljs-attr {
+  color: #9cdcfe !important;
+}
+
+.hljs-name {
+  color: #569cd6 !important;
+}
+
+.hljs-tag {
+  color: #569cd6 !important;
+}
+
+.hljs-attribute {
+  color: #9cdcfe !important;
+}
+
+.hljs-value {
+  color: #ce9178 !important;
+}
+
+/* === Tables === */
+.message-text table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+}
+
+.message-text th,
+.message-text td {
+  border: 1px solid #3e3e42;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.message-text th {
+  background-color: #2d2d30;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.message-text tr:nth-child(even) {
+  background-color: #252526;
+}
+
+/* === Blockquotes === */
+.message-text blockquote {
+  border-left: 4px solid #0e639c;
+  padding-left: 16px;
+  margin: 12px 0;
+  color: #858585;
+  font-style: italic;
+}
