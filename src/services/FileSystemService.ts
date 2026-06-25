@@ -177,7 +177,7 @@ export class FileSystemService {
 
     try {
       const tree = await this.buildTree(rootPath, rootPath, 0, maxDepth, excludePatterns, includeContent);
-      logger.info(`Сканирование завершено`, 'FileSystemService');
+      logger.info('Сканирование завершено', 'FileSystemService');
       return tree;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
