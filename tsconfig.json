@@ -3,7 +3,9 @@
     "module": "commonjs",
     "target": "ES2022",
     "outDir": "out",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "sourceMap": true,
     "rootDir": "src",
     "strict": true,
@@ -16,5 +18,14 @@
     "resolveJsonModule": true,
     "moduleResolution": "node"
   },
-  "exclude": ["node_modules", ".vscode-test", "out", "backups"]
+  "exclude": [
+    "node_modules",
+    ".vscode-test",
+    "out",
+    "backups",
+    "tests"
+  ],
+  "include": [
+    "src/**/*"
+  ]
 }
