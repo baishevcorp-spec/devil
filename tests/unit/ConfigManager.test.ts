@@ -2,8 +2,8 @@ import { ConfigManager } from '../../src/services/ConfigManager';
 import { ConfigError } from '../../src/utils/errors';
 import * as vscodeMock from '../__mocks__/vscode';
 
-// Jest автоматически подхватит tests/__mocks__/vscode.ts как мок модуля 'vscode'
-jest.mock('vscode', () => require('../__mocks__/vscode'), { virtual: true });
+// Мок модуля 'vscode' теперь настраивается через moduleNameMapper в jest.config.js
+// Ручной jest.mock('vscode', ...) больше не нужен — это устраняет бесконечную рекурсию
 
 describe('ConfigManager', () => {
   let configManager: ConfigManager;

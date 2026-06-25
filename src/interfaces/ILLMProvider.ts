@@ -168,7 +168,7 @@ export interface LLMResponse {
   /**
    * Дополнительные метаданные ответа.
    */
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**

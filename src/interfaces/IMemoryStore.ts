@@ -247,7 +247,7 @@ export interface GraphNode {
    * Дополнительные метаданные (JSON).
    * Например: { "line": 42, "exported": true, "async": true }
    */
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 
   /**
    * Теги узла (массив имён тегов).
@@ -305,7 +305,7 @@ export interface GraphEdge {
    * Дополнительные метаданные (JSON).
    * Например: { "line": 15 }
    */
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 
   /**
    * Unix timestamp создания (в миллисекундах).
@@ -433,7 +433,7 @@ export interface DialogMessage {
    * Дополнительные метаданные (JSON).
    * Например: { "tokens": 150, "model": "gpt-4o-mini" }
    */
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 
   /**
    * Unix timestamp создания (в миллисекундах).
@@ -473,7 +473,7 @@ export interface ChangeLogEntry {
   /**
    * Дополнительные метаданные (JSON).
    */
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 
   /**
    * Unix timestamp создания (в миллисекундах).
