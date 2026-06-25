@@ -44,7 +44,7 @@ export class LLMProvider implements ILLMProvider {
 
   constructor(private readonly configManager: ConfigManager) {
     this.currentModel = configManager.getModel();
-    this.currentBaseUrl = configManager.getBaseUrl();
+    this.currentBaseUrl = this.normalizeUrl(configManager.getBaseUrl());
     this.currentApiKey = configManager.getApiKey();
 
     this.axiosInstance = axios.create({
@@ -57,7 +57,7 @@ export class LLMProvider implements ILLMProvider {
     // Подписываемся на изменения конфигурации
     configManager.onConfigChanged(() => {
       this.currentModel = configManager.getModel();
-      this.currentBaseUrl = configManager.getBaseUrl();
+      this.currentBaseUrl = this.normalizeUrl(configManager.getBaseUrl());
       this.currentApiKey = configManager.getApiKey();
       logger.info('Конфигурация LLM обновлена', 'LLMProvider');
     });
@@ -180,7 +180,7 @@ export class LLMProvider implements ILLMProvider {
   }
 
   setBaseUrl(url: string): void {
-    this.currentBaseUrl = url;
+    this.currentBaseUrl = this.normalizeUrl(url);
     logger.info(`Base URL изменён: ${url}`, 'LLMProvider');
   }
 
@@ -315,5 +315,13 @@ export class LLMProvider implements ILLMProvider {
    */
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Нормализует URL: убирает trailing slash, чтобы избежать двойных слешей.
+   * Пример: 'https://api.proxyapi.ru/openai/v1/' → 'https://api.proxyapi.ru/openai/v1'
+   */
+  private normalizeUrl(url: string): string {
+    return url.replace(/\/+$/, '');
   }
 }
