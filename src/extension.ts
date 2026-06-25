@@ -3,6 +3,7 @@ import { ConfigManager } from './services/ConfigManager';
 import { FileSystemService } from './services/FileSystemService';
 import { ProjectManager } from './services/ProjectManager';
 import { LLMProvider } from './services/LLMProvider';
+import { ContextBuilder } from './services/ContextBuilder';
 import { logger } from './utils/logger';
 
 /**
@@ -12,6 +13,7 @@ let configManager: ConfigManager;
 let fileSystemService: FileSystemService;
 let projectManager: ProjectManager;
 let llmProvider: LLMProvider;
+let contextBuilder: ContextBuilder;
 
 /**
  * Точка входа расширения Devil.
@@ -28,18 +30,7 @@ export function activate(context: vscode.ExtensionContext): void {
     fileSystemService = new FileSystemService();
     projectManager = new ProjectManager(fileSystemService);
     llmProvider = new LLMProvider(configManager);
-
-    // Временная команда для тестирования LLM (будет удалена в Sprint 2)
-    const testLLMCommand = vscode.commands.registerCommand('devil.testLLM', async () => {
-      try {
-        vscode.window.showInformationMessage('Devil: Тестирование LLM...');
-        const response = await llmProvider.generate('Привет! Скажи "Привет, мир!" одним предложением.');
-        vscode.window.showInformationMessage(`Devil LLM ответ: ${response.content.substring(0, 100)}...`);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        vscode.window.showErrorMessage(`Devil LLM ошибка: ${message}`);
-      }
-    });
+    contextBuilder = new ContextBuilder(projectManager, fileSystemService, null);
 
     // Регистрируем команды
     const helloCommand = vscode.commands.registerCommand('devil.hello', () => {
@@ -71,6 +62,32 @@ export function activate(context: vscode.ExtensionContext): void {
         } else {
           vscode.window.showErrorMessage('Devil: Не удалось определить workspace folder');
         }
+      }
+    });
+
+    // Временная команда для тестирования LLM (будет удалена в Sprint 2)
+    const testLLMCommand = vscode.commands.registerCommand('devil.testLLM', async () => {
+      try {
+        vscode.window.showInformationMessage('Devil: Тестирование LLM...');
+        
+        // Строим контекст
+        const context = await contextBuilder.buildContext('Привет! Скажи "Привет, мир!" одним предложением.', {
+          includeProjectStructure: true,
+          includeRoadmap: true,
+          includeChecklist: true
+        });
+        
+        logger.info(`Контекст построен (длина: ${context.systemPrompt.length} символов)`, 'Extension');
+        
+        // Отправляем запрос к LLM
+        const response = await llmProvider.generate('Привет! Скажи "Привет, мир!" одним предложением.', {
+          systemPrompt: context.systemPrompt
+        });
+        
+        vscode.window.showInformationMessage(`Devil LLM ответ: ${response.content.substring(0, 100)}...`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Devil LLM ошибка: ${message}`);
       }
     });
 
