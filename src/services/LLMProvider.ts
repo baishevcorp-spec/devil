@@ -100,8 +100,14 @@ export class LLMProvider implements ILLMProvider {
       }
     }
 
+    // После всех попыток проверяем тип последней ошибки
+    if (lastError instanceof NetworkError) {
+      // Если это NetworkError (проблемы с сетью), выбрасываем его, а не оборачиваем в LLMError
+      throw lastError;
+    }
+    
     throw new LLMError(
-      `Failed after ${maxRetries} attempts: ${lastError?.message}`,
+      'Failed after ' + maxRetries + ' attempts: ' + (lastError?.message || 'Unknown error'),
       false,
       'Не удалось получить ответ от LLM. Проверьте настройки и попробуйте позже.'
     );
@@ -222,7 +228,15 @@ export class LLMProvider implements ILLMProvider {
       );
 
       const data = response.data;
-      const choice = data.choices?.[0];
+      if (!data.choices || data.choices.length === 0) {
+        throw new LLMError('No choices in response', false, 'LLM не вернул ответ.');
+      }
+      
+      const choice = data.choices[0];
+      
+      if (!choice.message || typeof choice.message.content !== 'string') {
+        throw new LLMError('Invalid choice format', false, 'LLM вернул некорректный ответ.');
+      }
 
       if (!choice) {
         throw new LLMError('No choices in response', false, 'LLM не вернул ответ.');
