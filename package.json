@@ -2,13 +2,22 @@
   "name": "devil",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "./out/extension.js",
   "directories": {
     "doc": "docs",
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node ./out/test/runTest.js",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "lint:fix": "eslint src --ext ts --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "pretest": "npm run compile && npm run lint",
+    "vscode:prepublish": "npm run compile",
+    "package": "vsce package"
   },
   "keywords": [],
   "author": "",
@@ -26,5 +35,8 @@
   },
   "dependencies": {
     "axios": "^1.18.1"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
   }
 }
