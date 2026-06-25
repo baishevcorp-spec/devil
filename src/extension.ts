@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ConfigManager } from './services/ConfigManager';
 import { FileSystemService } from './services/FileSystemService';
 import { ProjectManager } from './services/ProjectManager';
+import { LLMProvider } from './services/LLMProvider';
 import { logger } from './utils/logger';
 
 /**
@@ -10,6 +11,7 @@ import { logger } from './utils/logger';
 let configManager: ConfigManager;
 let fileSystemService: FileSystemService;
 let projectManager: ProjectManager;
+let llmProvider: LLMProvider;
 
 /**
  * Точка входа расширения Devil.
@@ -25,6 +27,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     fileSystemService = new FileSystemService();
     projectManager = new ProjectManager(fileSystemService);
+    llmProvider = new LLMProvider(configManager);
 
     // Регистрируем команды
     const helloCommand = vscode.commands.registerCommand('devil.hello', () => {
