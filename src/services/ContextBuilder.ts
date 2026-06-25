@@ -121,7 +121,7 @@ export class ContextBuilder {
       };
     }
 
-    logger.info(`Построение контекста для запроса: ${userQuery.substring(0, 50)}...`, 'ContextBuilder');
+    logger.info('Построение контекста для запроса: ' + userQuery.substring(0, 50) + '...', 'ContextBuilder');
 
     const parts: string[] = [];
     const metadata: ContextResult['metadata'] = {
@@ -183,7 +183,7 @@ export class ContextBuilder {
     }
 
     // 7. Запрос пользователя
-    parts.push(`\n## Запрос пользователя\n\n${userQuery}`);
+    parts.push('\n## Запрос пользователя\n\n' + userQuery);
 
     // Объединяем все части
     let systemPrompt = parts.join('\n\n');
@@ -197,7 +197,7 @@ export class ContextBuilder {
 
     metadata.totalLength = systemPrompt.length;
 
-    logger.info(`Контекст построен (длина: ${systemPrompt.length} символов)`, 'ContextBuilder');
+    logger.info('Контекст построен (длина: ' + systemPrompt.length + ' символов)', 'ContextBuilder');
 
     return { systemPrompt, metadata };
   }
@@ -206,24 +206,20 @@ export class ContextBuilder {
    * Строит минимальный контекст, если проект не открыт.
    */
   private buildMinimalContext(userQuery: string): string {
-    return `# Devil AI Assistant
-
-Ты — Devil, интеллектуальный ассистент для разработчика. Отвечай на русском языке, кратко и по делу. Используй Markdown для форматирования.
-
-## Запрос пользователя
-
-${userQuery}`;
+    return '# Devil AI Assistant\n\n' +
+      'Ты — Devil, интеллектуальный ассистент для разработчика. Отвечай на русском языке, кратко и по делу. Используй Markdown для форматирования.\n\n' +
+      '## Запрос пользователя\n\n' +
+      userQuery;
   }
 
   /**
    * Строит базовую информацию о проекте.
    */
   private buildProjectInfo(project: ProjectInfo): string {
-    return `# Информация о проекте
-
-- **Название:** ${project.name}
-    return `# Информация о проекте\n\n- **Название:** ${project.name}\n- **Путь:** \`${project.path}\`\n- **Количество файлов:** ${project.fileCount}`;
-- **Количество файлов:** ${project.fileCount}`;
+    return '# Информация о проекте\n\n' +
+      '- **Название:** ' + project.name + '\n' +
+      '- **Путь:** `' + project.path + '`\n' +
+      '- **Количество файлов:** ' + project.fileCount;
   }
 
   /**
@@ -234,7 +230,10 @@ ${userQuery}`;
       return null;
     }
 
-    const lines: string[] = ['# Структура проекта', '', '```'];
+    const lines: string[] = [];
+    lines.push('# Структура проекта');
+    lines.push('');
+    lines.push('```');
     this.formatTree(tree, lines, 0);
     lines.push('```');
 
@@ -246,23 +245,21 @@ ${userQuery}`;
    */
   private formatTree(node: FileTree, lines: string[], depth: number): void {
     if (depth > 3) {
-      // Ограничиваем глубину для краткости
       return;
     }
 
     const indent = '  '.repeat(depth);
     const icon = node.type === 'directory' ? '📁' : '📄';
-    lines.push(`${indent}${icon} ${node.name}`);
+    lines.push(indent + icon + ' ' + node.name);
 
     if (node.children) {
-      // Показываем только первые 10 детей для краткости
       const childrenToShow = node.children.slice(0, 10);
       for (const child of childrenToShow) {
         this.formatTree(child, lines, depth + 1);
       }
 
       if (node.children.length > 10) {
-        lines.push(`${indent}  ... и ещё ${node.children.length - 10} файлов`);
+        lines.push(indent + '  ... и ещё ' + (node.children.length - 10) + ' файлов');
       }
     }
   }
@@ -281,15 +278,14 @@ ${userQuery}`;
 
       const content = await this.fileSystemService.readFile(roadmapPath);
       
-      // Ограничиваем длину Roadmap
       const maxLength = 2000;
       const truncatedContent = content.length > maxLength 
         ? content.substring(0, maxLength) + '\n\n[Roadmap обрезан]'
         : content;
 
-      return `# Roadmap проекта\n\n${truncatedContent}`;
+      return '# Roadmap проекта\n\n' + truncatedContent;
     } catch (error) {
-      logger.warn('Не удалось прочитать Roadmap', error, 'ContextBuilder');
+      logger.warn('Не удалось прочитать Roadmap: ' + (error instanceof Error ? error.message : String(error)), 'ContextBuilder');
       return null;
     }
   }
@@ -308,15 +304,14 @@ ${userQuery}`;
 
       const content = await this.fileSystemService.readFile(checklistPath);
       
-      // Ограничиваем длину чек-листа
       const maxLength = 1500;
       const truncatedContent = content.length > maxLength 
         ? content.substring(0, maxLength) + '\n\n[Чек-лист обрезан]'
         : content;
 
-      return `# Чек-лист задач\n\n${truncatedContent}`;
+      return '# Чек-лист задач\n\n' + truncatedContent;
     } catch (error) {
-      logger.warn('Не удалось прочитать чек-лист', error, 'ContextBuilder');
+      logger.warn('Не удалось прочитать чек-лист: ' + (error instanceof Error ? error.message : String(error)), 'ContextBuilder');
       return null;
     }
   }
@@ -330,38 +325,42 @@ ${userQuery}`;
     }
 
     try {
-      // Получаем последние 20 узлов (файлы, классы, функции)
       const nodes = await this.memoryStore.findNodes({ limit: 20 });
       
       if (nodes.length === 0) {
         return null;
       }
 
-      const lines: string[] = ['# Графовая память проекта', ''];
+      const lines: string[] = [];
+      lines.push('# Графовая память проекта');
+      lines.push('');
       
-      // Группируем по типу
       const files = nodes.filter(n => n.type === 'file');
       const classes = nodes.filter(n => n.type === 'class');
       const functions = nodes.filter(n => n.type === 'function');
 
       if (files.length > 0) {
         lines.push('## Файлы:');
-        files.slice(0, 10).forEach(f => lines.push('- ' + f.name + ' (`' + f.path + '`)'));
+        files.slice(0, 10).forEach(f => {
+          lines.push('- ' + f.name + ' (`' + (f.path || '') + '`)');
+        });
       }
 
       if (classes.length > 0) {
-        lines.push('\\n## Классы:');
-        classes.slice(0, 10).forEach(c => lines.push(`- ${c.name}`));
+        lines.push('');
+        lines.push('## Классы:');
+        classes.slice(0, 10).forEach(c => lines.push('- ' + c.name));
       }
 
       if (functions.length > 0) {
-        lines.push('\\n## Функции:');
-        functions.slice(0, 10).forEach(f => lines.push(`- ${f.name}`));
+        lines.push('');
+        lines.push('## Функции:');
+        functions.slice(0, 10).forEach(f => lines.push('- ' + f.name));
       }
 
-      return lines.join('\\n');
+      return lines.join('\n');
     } catch (error) {
-      logger.warn('Не удалось получить данные из графовой памяти', error, 'ContextBuilder');
+      logger.warn('Не удалось получить данные из графовой памяти: ' + (error instanceof Error ? error.message : String(error)), 'ContextBuilder');
       return null;
     }
   }
