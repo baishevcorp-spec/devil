@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Devil — AI Assistant</title>
+    <link rel="stylesheet" href="chat.css">
+</head>
+<body>
+    <div class="chat-container">
+        <!-- Header -->
+        <div class="chat-header">
+            <div class="project-info">
+                <span class="project-icon">📁</span>
+                <span class="project-name">devil</span>
+                <span class="project-path">/c/myproject/devil</span>
+            </div>
+            <div class="header-actions">
+                <button class="icon-button" title="Очистить историю">🗑️</button>
+                <button class="icon-button" title="Настройки">⚙️</button>
+            </div>
+        </div>
+
+        <!-- Messages Area -->
+        <div class="messages-area" id="messagesArea">
+            <!-- System Message -->
+            <div class="message system-message">
+                <div class="message-avatar">🤖</div>
+                <div class="message-content">
+                    <div class="message-text">
+                        Привет! Я Devil — твой интеллектуальный ассистент для разработки. 
+                        Я могу помочь с генерацией кода, объяснением, рефакторингом и анализом проекта.
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Message -->
+            <div class="message user-message">
+                <div class="message-avatar">👤</div>
+                <div class="message-content">
+                    <div class="message-text">
+                        Объясни, что делает функция <code>activate</code> в файле <code>src/extension.ts</code>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Assistant Message with Markdown -->
+            <div class="message assistant-message">
+                <div class="message-avatar">🤖</div>
+                <div class="message-content">
+                    <div class="message-text">
+                        <h3>Функция <code>activate</code> в extension.ts</h3>
+                        <p>
+                            Функция <code>activate</code> — это <strong>точка входа</strong> расширения VS Code. 
+                            Она вызывается автоматически, когда VS Code активирует расширение (например, при выполнении команды).
+                        </p>
+                        
+                        <h4>Что делает функция:</h4>
+                        <ol>
+                            <li>Выводит сообщение в консоль: <code>"Devil extension is now active!"</code></li>
+                            <li>Регистрирует команду <code>devil.hello</code> через <code>vscode.commands.registerCommand</code></li>
+                            <li>Добавляет команду в <code>context.subscriptions</code> для автоматической очистки ресурсов</li>
+                        </ol>
+
+                        <h4>Пример кода:</h4>
+                        <div class="code-block">
+                            <div class="code-header">
+                                <span class="code-language">typescript</span>
+                                <button class="copy-button" onclick="copyCode(this)">📋 Копировать</button>
+                            </div>
+                            <pre><code>export function activate(context: vscode.ExtensionContext): void {
+  console.log('Devil extension is now active!');
+
+  const disposable = vscode.commands.registerCommand('devil.hello', () => {
+    vscode.window.showInformationMessage('Devil: расширение работает!');
+  });
+
+  context.subscriptions.push(disposable);
+}</code></pre>
+                        </div>
+
+                        <h4>Ключевые моменты:</h4>
+                        <ul>
+                            <li><strong>context: vscode.ExtensionContext</strong> — объект контекста, предоставляемый VS Code</li>
+                            <li><strong>context.subscriptions</strong> — массив ресурсов, которые VS Code автоматически очистит при деактивации</li>
+                            <li><strong>vscode.commands.registerCommand</strong> — регистрирует команду, которую можно вызвать из палитры команд</li>
+                        </ul>
+
+                        <p>
+                            💡 <strong>Совет:</strong> В Sprint 1 мы добавим сюда регистрацию команд <code>devil.openChat</code> и <code>devil.openProject</code>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Message with Command -->
+            <div class="message user-message">
+                <div class="message-avatar">👤</div>
+                <div class="message-content">
+                    <div class="message-text">
+                        /whereis activate
+                    </div>
+                </div>
+            </div>
+
+            <!-- Assistant Message with Search Results -->
+            <div class="message assistant-message">
+                <div class="message-avatar">🤖</div>
+                <div class="message-content">
+                    <div class="message-text">
+                        <h3>Результаты поиска: <code>activate</code></h3>
+                        <p>Найдено в <strong>2 файлах</strong>:</p>
+                        
+                        <div class="search-results">
+                            <div class="search-result-item">
+                                <div class="file-path">📄 src/extension.ts</div>
+                                <div class="code-snippet">
+                                    <pre><code><span class="highlight">export function activate</span>(context: vscode.ExtensionContext): void {
+  console.log('Devil extension is now active!');
+  ...
+}</code></pre>
+                                </div>
+                            </div>
+
+                            <div class="search-result-item">
+                                <div class="file-path">📄 docs/ARCHITECTURE.md</div>
+                                <div class="code-snippet">
+                                    <pre><code>Extension Entry (<code>extension.ts</code>)
+- Активация расширения
+- Регистрация команд (<code>devil.openChat</code>, <code>devil.openProject</code>, <code>/explain</code>, <code>/roadmap</code>, и т.д.)
+- Инициализация сервисов
+- Освобождение ресурсов при деактивации</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-area">
+            <div class="input-container">
+                <textarea 
+                    id="messageInput" 
+                    class="message-input" 
+                    placeholder="Введите сообщение или команду (например, /explain, /roadmap, /whereis)..."
+                    rows="3"
+                ></textarea>
+                <button class="send-button" id="sendButton" title="Отправить (Enter)">
+                    <span class="send-icon">➤</span>
+                </button>
+            </div>
+            <div class="input-hints">
+                <span class="hint">💡 Команды: /explain, /refactor, /roadmap, /whereis, /scan</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="chat.js"></script>
+</body>
+</html>
