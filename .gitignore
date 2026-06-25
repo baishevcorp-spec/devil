@@ -24,3 +24,6 @@ backups/
 # Логи
 *.log
 npm-debug.log*
+
+# Coverage
+coverage/

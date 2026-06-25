@@ -8,30 +8,35 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "node ./out/test/runTest.js",
+    "test": "jest",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
     "lint:fix": "eslint src --ext ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
-    "pretest": "npm run compile && npm run lint",
+    "pretest": "npm run compile",
     "vscode:prepublish": "npm run compile",
-    "package": "vsce package"
+    "package": "vsce package",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
+    "@types/jest": "^29.5.14",
     "@types/node": "^20.19.43",
     "@types/vscode": "^1.125.0",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "@vscode/vsce": "^2.32.0",
     "eslint": "^8.57.1",
+    "jest": "^29.7.0",
     "prettier": "^3.8.4",
-    "typescript": "^5.9.3"
+    "ts-jest": "^29.4.11",
+    "typescript": "^5.3.3"
   },
   "dependencies": {
     "axios": "^1.18.1"
