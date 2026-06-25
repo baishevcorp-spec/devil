@@ -88,18 +88,41 @@
       "properties": {
         "devil.baseUrl": {
           "type": "string",
-          "default": "https://api.myproxyapi.ru/v1",
-          "description": "Base URL для LLM API (OpenAI-совместимый)"
+          "default": "https://api.openai.com/v1",
+          "description": "Base URL для LLM API (OpenAI-совместимый). Примеры: https://api.openai.com/v1, https://api.myproxyapi.ru/v1, http://localhost:11434/v1 (для Ollama)"
         },
         "devil.apiKey": {
           "type": "string",
           "default": "",
-          "description": "API ключ для LLM (хранится в настройках VS Code)"
+          "description": "API-ключ для LLM. Хранится в settings.json (в будущем — в keytar)."
         },
         "devil.model": {
           "type": "string",
           "default": "gpt-4o-mini",
-          "description": "Модель LLM по умолчанию"
+          "description": "Модель LLM по умолчанию. Примеры: gpt-4o, gpt-4o-mini, claude-3-5-sonnet, llama3"
+        },
+        "devil.maxRetries": {
+          "type": "number",
+          "default": 3,
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Количество повторных попыток при ошибке сети/LLM."
+        },
+        "devil.cacheTtlSeconds": {
+          "type": "number",
+          "default": 604800,
+          "minimum": 0,
+          "description": "Время жизни кэша ответов LLM в секундах. По умолчанию 7 дней (604800)."
+        },
+        "devil.defaultSystemPrompt": {
+          "type": "string",
+          "default": "Ты — Devil, интеллектуальный ассистент для разработчика. Отвечай на русском языке, кратко и по делу. Используй Markdown для форматирования.",
+          "description": "Системный промпт по умолчанию для всех запросов к LLM."
+        },
+        "devil.debugMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Включить DEBUG-логи в Output Channel \"Devil\"."
         }
       }
     }
