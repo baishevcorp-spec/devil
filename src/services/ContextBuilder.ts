@@ -222,7 +222,7 @@ ${userQuery}`;
     return `# Информация о проекте
 
 - **Название:** ${project.name}
-- **Путь:** `${project.path}`
+    return `# Информация о проекте\n\n- **Название:** ${project.name}\n- **Путь:** \`${project.path}\`\n- **Количество файлов:** ${project.fileCount}`;
 - **Количество файлов:** ${project.fileCount}`;
   }
 
@@ -346,7 +346,7 @@ ${userQuery}`;
 
       if (files.length > 0) {
         lines.push('## Файлы:');
-        files.slice(0, 10).forEach(f => lines.push(`- ${f.name} (`${f.path}`)`));
+        files.slice(0, 10).forEach(f => lines.push('- ' + f.name + ' (`' + f.path + '`)'));
       }
 
       if (classes.length > 0) {
