@@ -1,24 +1,43 @@
 import { LLMProvider } from '../../src/services/LLMProvider';
 import { ConfigManager } from '../../src/services/ConfigManager';
 import { LLMError, NetworkError } from '../../src/utils/errors';
-import axios from 'axios';
 import * as vscodeMock from '../__mocks__/vscode';
 
-// Мокаем axios
+// Мок модуля 'vscode' через moduleNameMapper в jest.config.js
+
+// Мок axios с поддержкой default import
+let mockAxiosInstance: { post: jest.Mock; get: jest.Mock };
+
 jest.mock('axios', () => ({
-  create: jest.fn(() => ({
-    post: jest.fn(),
-    get: jest.fn()
-  })),
-  isAxiosError: jest.fn((error) => error.isAxiosError === true)
+  __esModule: true,
+  default: {
+    create: jest.fn(() => mockAxiosInstance),
+    isAxiosError: jest.fn((error: any) => error?.isAxiosError === true)
+  },
+  isAxiosError: jest.fn((error: any) => error?.isAxiosError === true)
 }));
+
+// Импортируем axios после jest.mock
+import axios from 'axios';
 
 describe('LLMProvider', () => {
   let llmProvider: LLMProvider;
   let configManager: ConfigManager;
-  let mockAxiosInstance: { post: jest.Mock; get: jest.Mock };
 
   beforeEach(() => {
+    // Очищаем все моки перед каждым тестом
+    jest.clearAllMocks();
+
+    // Создаём свежий мок-инстанс для каждого теста
+    mockAxiosInstance = {
+      post: jest.fn(),
+      get: jest.fn()
+    };
+
+    // Настраиваем axios.create так, чтобы он возвращал наш мок-инстанс
+    (axios.create as jest.Mock).mockReturnValue(mockAxiosInstance);
+
+    // Настраиваем конфигурацию
     vscodeMock.__clearConfig();
     vscodeMock.__setConfigValue('devil.baseUrl', 'https://api.openai.com/v1');
     vscodeMock.__setConfigValue('devil.apiKey', 'sk-test-key');
@@ -28,15 +47,12 @@ describe('LLMProvider', () => {
     configManager = new ConfigManager();
     configManager.initialize();
 
+    // Создаём LLMProvider (в конструкторе вызывается axios.create)
     llmProvider = new LLMProvider(configManager);
-
-    // Получаем мок axios instance
-    mockAxiosInstance = (axios.create as jest.Mock)();
   });
 
   afterEach(() => {
     configManager.dispose();
-    jest.clearAllMocks();
   });
 
   describe('generate', () => {
@@ -74,7 +90,8 @@ describe('LLMProvider', () => {
         response: {
           status: 500,
           data: { error: 'Internal server error' }
-        }
+        },
+        message: 'Request failed with status code 500'
       };
 
       const mockResponse = {
@@ -117,7 +134,8 @@ describe('LLMProvider', () => {
         response: {
           status: 429,
           data: { error: 'Rate limit exceeded' }
-        }
+        },
+        message: 'Request failed with status code 429'
       };
 
       mockAxiosInstance.post.mockRejectedValue(error429);
