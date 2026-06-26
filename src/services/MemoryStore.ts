@@ -15,7 +15,7 @@ import { logger } from '../utils/logger';
 
 /**
  * MemoryStore — реализация графовой памяти на SQLite.
- * 
+ *
  * Использует sql.js (SQLite в WebAssembly) для работы без нативных зависимостей.
  * БД хранится в .devil/memory.db проекта.
  */
@@ -101,7 +101,7 @@ export class MemoryStore implements IMemoryStore {
 
   private save(): void {
     if (!this.db) return;
-    
+
     try {
       const data = this.db.export();
       const buffer = Buffer.from(data);
@@ -225,7 +225,7 @@ export class MemoryStore implements IMemoryStore {
     relatedNodes: GraphNode[];
   }> {
     const node = await this.getNodeByPath(filePath);
-    
+
     if (!node || !node.id) {
       return { node: null, incoming: [], outgoing: [], relatedNodes: [] };
     }
@@ -253,10 +253,10 @@ export class MemoryStore implements IMemoryStore {
     if (!this.db) throw new Error('MemoryStore не инициализирован');
 
     const now = Date.now();
-    
+
     // Проверяем, существует ли запись
     const existing = this.db.exec('SELECT id FROM project_info WHERE path = ?', [info.path]);
-    
+
     if (existing.length > 0 && existing[0].values.length > 0) {
       this.db.run(
         'UPDATE project_info SET name = ?, last_scan_at = ? WHERE path = ?',
@@ -277,14 +277,14 @@ export class MemoryStore implements IMemoryStore {
     if (!this.db) return null;
 
     const result = this.db.exec('SELECT * FROM project_info LIMIT 1');
-    
+
     if (result.length === 0 || result[0].values.length === 0) {
       return null;
     }
 
     const columns = result[0].columns;
     const row = result[0].values[0];
-    
+
     return {
       id: row[columns.indexOf('id')] as number,
       path: row[columns.indexOf('path')] as string,
@@ -299,7 +299,7 @@ export class MemoryStore implements IMemoryStore {
     this.db.run('DELETE FROM edges');
     this.db.run('DELETE FROM nodes');
     this.db.run('DELETE FROM project_info');
-    
+
     this.save();
     logger.info('БД очищена', 'MemoryStore');
   }
@@ -313,9 +313,12 @@ export class MemoryStore implements IMemoryStore {
     }
   }
 
+  /**
+   * Преобразует строку БД в объект GraphNode.
+   */
   private rowToNode(columns: string[], row: unknown[]): GraphNode {
-    const getValue = (col: string) => row[columns.indexOf(col)];
-    
+    const getValue = (col: string): unknown => row[columns.indexOf(col)];
+
     const metadataStr = getValue('metadata') as string | null;
     const metadata = metadataStr ? JSON.parse(metadataStr) : undefined;
 
@@ -331,9 +334,12 @@ export class MemoryStore implements IMemoryStore {
     };
   }
 
+  /**
+   * Преобразует строку БД в объект GraphEdge.
+   */
   private rowToEdge(columns: string[], row: unknown[]): GraphEdge {
-    const getValue = (col: string) => row[columns.indexOf(col)];
-    
+    const getValue = (col: string): unknown => row[columns.indexOf(col)];
+
     const metadataStr = getValue('metadata') as string | null;
     const metadata = metadataStr ? JSON.parse(metadataStr) : undefined;
 
