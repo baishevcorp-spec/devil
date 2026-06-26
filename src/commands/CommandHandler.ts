@@ -10,15 +10,6 @@ export interface CommandResult {
   data?: unknown;
 }
 
-/**
- * CommandHandler — обработка команд из чата.
- *
- * Формат команд:
- *   /command arg1 arg2
- *   /command arg1 --- выделенный код
- *
- * Разделитель " --- " разделяет путь к файлу и выделенный код.
- */
 export class CommandHandler {
   constructor(
     private readonly fileSystemService: FileSystemService,
@@ -36,7 +27,6 @@ export class CommandHandler {
       return null;
     }
 
-    // Разделяем команду и выделенный код через " --- "
     const separatorIndex = trimmed.indexOf(' --- ');
     let commandPart: string;
     let selectedCode: string | null = null;
@@ -63,6 +53,8 @@ export class CommandHandler {
         return await this.handleChecklist(args);
       case '/explain':
         return await this.handleExplain(args, selectedCode);
+      case '/view':
+        return await this.handleView(args);
       case '/help':
         return this.handleHelp();
       default:
@@ -82,7 +74,6 @@ export class CommandHandler {
       };
     }
 
-    // Первый аргумент — путь к файлу
     const filePath = args[0];
     const project = this.projectManager.getCurrentProject();
 
@@ -217,7 +208,7 @@ export class CommandHandler {
         'Для каждого файла укажи:\n' +
         '- Путь к файлу\n' +
         '- Краткое описание назначения\n' +
-        '- Статус (✅ реализован /  в разработке / ❌ не начато)\n\n' +
+        '- Статус (✅ реализован / в разработке /  не начато)\n\n' +
         'Формат:\n' +
         '- [ ] `путь/к/файлу` — описание\n\n' +
         'Отвечай на русском языке.';
@@ -252,7 +243,6 @@ export class CommandHandler {
       };
     }
 
-    // Первый аргумент — путь к файлу
     const filePath = args[0];
     const project = this.projectManager.getCurrentProject();
 
@@ -279,7 +269,6 @@ export class CommandHandler {
         includeProjectStructure: true,
       });
 
-      // Если есть выделенный код — объясняем только его
       const codeToExplain = selectedCode || content;
       const codeLabel = selectedCode ? 'выделенный фрагмент из файла' : 'весь файл';
 
@@ -321,11 +310,82 @@ export class CommandHandler {
     }
   }
 
+  private async handleView(args: string[]): Promise<CommandResult> {
+    if (args.length === 0) {
+      return {
+        success: false,
+        message:
+          'Использование:\n' +
+          '- `/view roadmap` — показать Roadmap проекта\n' +
+          '- `/view checklist` — показать чек-лист файлов\n' +
+          '- `/view <путь>` — показать любой Markdown-файл из .devil/',
+      };
+    }
+
+    const project = this.projectManager.getCurrentProject();
+    if (!project) {
+      return {
+        success: false,
+        message: 'Проект не открыт. Используйте команду "Devil: Open Project".',
+      };
+    }
+
+    const fileName = args[0].toLowerCase();
+    let filePath: string;
+
+    if (fileName === 'roadmap') {
+      filePath = 'roadmap.md';
+    } else if (fileName === 'checklist') {
+      filePath = 'checklist.md';
+    } else {
+      filePath = args.join(' ');
+    }
+
+    const fullPath = project.devilPath + '/' + filePath;
+
+    try {
+      const exists = await this.fileSystemService.fileExists(fullPath);
+      if (!exists) {
+        return {
+          success: false,
+          message:
+            'Файл не найден: .devil/' +
+            filePath +
+            '\n\n' +
+            'Используйте `/roadmap generate` или `/checklist generate` для создания файла.',
+        };
+      }
+
+      const fileContent = await this.fileSystemService.readFile(fullPath);
+
+      let header = '## Содержимое файла: .devil/' + filePath;
+      if (fileName === 'roadmap') {
+        header = '## Roadmap проекта';
+      } else if (fileName === 'checklist') {
+        header = '## Чек-лист файлов проекта';
+      }
+
+      return {
+        success: true,
+        message: header + '\n\n' + fileContent,
+        data: { path: fullPath, content: fileContent },
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: 'Ошибка чтения файла: ' + errorMessage,
+      };
+    }
+  }
+
   private handleHelp(): CommandResult {
     const helpText = [
       '## Доступные команды',
       '',
       '**Файлы:**',
+      '- `/view roadmap` — показать Roadmap проекта',
+      '- `/view checklist` — показать чек-лист',
       '- `/scan <путь>` — прочитать содержимое файла',
       '- `/explain <путь>` — объяснить код файла',
       '',
