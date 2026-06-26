@@ -4,6 +4,7 @@ import { LLMProvider } from '../../src/services/LLMProvider';
 import { ContextBuilder } from '../../src/services/ContextBuilder';
 import { ProjectManager } from '../../src/services/ProjectManager';
 import { MemoryStore } from '../../src/services/MemoryStore';
+import { GitService } from '../../src/services/GitService';
 import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -14,6 +15,7 @@ describe('CommandHandler Integration Tests', () => {
   let fsService: FileSystemService;
   let projectManager: ProjectManager;
   let memoryStore: MemoryStore;
+  let gitService: GitService;
   let testDir: string;
 
   const mockLLMProvider = {
@@ -31,6 +33,7 @@ describe('CommandHandler Integration Tests', () => {
     fsService = new FileSystemService();
     projectManager = new ProjectManager(fsService);
     memoryStore = new MemoryStore();
+    gitService = new GitService();
 
     testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'devil-cmd-test-'));
 
@@ -61,7 +64,8 @@ describe('CommandHandler Integration Tests', () => {
       mockLLMProvider,
       mockContextBuilder,
       projectManager,
-      memoryStore
+      memoryStore,
+      gitService
     );
   });
 
@@ -83,6 +87,7 @@ describe('CommandHandler Integration Tests', () => {
       expect(result!.message).toContain('/explain');
       expect(result!.message).toContain('/roadmap');
       expect(result!.message).toContain('/whereis');
+      expect(result!.message).toContain('/diff');
     });
   });
 
@@ -315,6 +320,16 @@ describe('CommandHandler Integration Tests', () => {
       expect(result!.success).toBe(true);
       expect(result!.message).toContain('Найдено символов');
       expect(result!.message).toContain('activate');
+    });
+  });
+
+  describe('/diff command', () => {
+    it('возвращает подсказку при неправильном количестве аргументов', async () => {
+      const result = await commandHandler.handleMessage('/diff a b c');
+
+      expect(result).not.toBeNull();
+      expect(result!.success).toBe(false);
+      expect(result!.message).toContain('Использование');
     });
   });
 

@@ -4,6 +4,7 @@ import { LLMProvider } from '../services/LLMProvider';
 import { ContextBuilder } from '../services/ContextBuilder';
 import { ProjectManager } from '../services/ProjectManager';
 import { IMemoryStore } from '../interfaces/IMemoryStore';
+import { GitService } from '../services/GitService';
 
 export interface CommandResult {
   success: boolean;
@@ -17,7 +18,8 @@ export class CommandHandler {
     private readonly llmProvider: LLMProvider,
     private readonly contextBuilder: ContextBuilder,
     private readonly projectManager: ProjectManager,
-    private readonly memoryStore: IMemoryStore
+    private readonly memoryStore: IMemoryStore,
+    private readonly gitService: GitService
   ) {
     logger.info('CommandHandler инициализирован', 'CommandHandler');
   }
@@ -57,6 +59,8 @@ export class CommandHandler {
         return await this.handleExplain(args, selectedCode);
       case '/whereis':
         return await this.handleWhereis(args);
+      case '/diff':
+        return await this.handleDiff(args);
       case '/view':
         return await this.handleView(args);
       case '/help':
@@ -364,6 +368,65 @@ export class CommandHandler {
     }
   }
 
+  private async handleDiff(args: string[]): Promise<CommandResult> {
+    try {
+      let diffContent: string;
+
+      if (args.length === 0) {
+        diffContent = await this.gitService.getDiff('HEAD~1', 'HEAD');
+      } else if (args.length === 1) {
+        const commit = args[0];
+        diffContent = await this.gitService.getDiff(commit + '~1', commit);
+      } else if (args.length === 2) {
+        diffContent = await this.gitService.getDiff(args[0], args[1]);
+      } else {
+        return {
+          success: false,
+          message: 'Использование:\n' +
+            '- `/diff` — показать последние изменения\n' +
+            '- `/diff <commit>` — показать изменения в коммите\n' +
+            '- `/diff <commitA> <commitB>` — показать diff между коммитами'
+        };
+      }
+
+      if (!diffContent || diffContent.trim() === '') {
+        return {
+          success: false,
+          message: 'Diff пуст или коммиты не найдены.'
+        };
+      }
+
+      const lines = diffContent.split('\n');
+      const formattedLines: string[] = [];
+
+      for (const line of lines) {
+        if (line.startsWith('+++') || line.startsWith('---')) {
+          formattedLines.push('**' + line + '**');
+        } else if (line.startsWith('+')) {
+          formattedLines.push('+ ' + line.substring(1));
+        } else if (line.startsWith('-')) {
+          formattedLines.push('- ' + line.substring(1));
+        } else {
+          formattedLines.push(line);
+        }
+      }
+
+      const markdown = '## Diff\n\n```diff\n' + formattedLines.join('\n') + '\n```';
+
+      return {
+        success: true,
+        message: markdown,
+        data: { diff: diffContent }
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: 'Ошибка получения diff: ' + errorMessage
+      };
+    }
+  }
+
   private async handleView(args: string[]): Promise<CommandResult> {
     if (args.length === 0) {
       return {
@@ -434,6 +497,7 @@ export class CommandHandler {
       '## Доступные команды',
       '',
       '**Файлы:**',
+      '- `/diff [commit]` — показать изменения в коде',
       '- `/whereis <символ>` — найти символ в проекте',
       '- `/view roadmap` — показать Roadmap проекта',
       '- `/view checklist` — показать чек-лист',

@@ -5,6 +5,7 @@ import { ContextBuilder } from '../services/ContextBuilder';
 import { ProjectManager } from '../services/ProjectManager';
 import { FileSystemService } from '../services/FileSystemService';
 import { MemoryStore } from '../services/MemoryStore';
+import { GitService } from '../services/GitService';
 import { CommandHandler } from '../commands/CommandHandler';
 import { HistoryManager } from '../services/HistoryManager';
 
@@ -35,6 +36,7 @@ export class ChatPanel {
   private readonly projectManager: ProjectManager;
   private readonly fileSystemService: FileSystemService;
   private readonly memoryStore: MemoryStore;
+  private readonly gitService: GitService;
   private readonly commandHandler: CommandHandler;
   private readonly historyManager: HistoryManager;
 
@@ -44,7 +46,8 @@ export class ChatPanel {
     contextBuilder: ContextBuilder,
     projectManager: ProjectManager,
     fileSystemService: FileSystemService,
-    memoryStore: MemoryStore
+    memoryStore: MemoryStore,
+    gitService: GitService
   ): ChatPanel {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
@@ -76,7 +79,8 @@ export class ChatPanel {
       contextBuilder,
       projectManager,
       fileSystemService,
-      memoryStore
+      memoryStore,
+      gitService
     );
     return ChatPanel.currentPanel;
   }
@@ -88,7 +92,8 @@ export class ChatPanel {
     contextBuilder: ContextBuilder,
     projectManager: ProjectManager,
     fileSystemService: FileSystemService,
-    memoryStore: MemoryStore
+    memoryStore: MemoryStore,
+    gitService: GitService
   ) {
     this._panel = panel;
     this._extensionUri = extensionUri;
@@ -97,12 +102,14 @@ export class ChatPanel {
     this.projectManager = projectManager;
     this.fileSystemService = fileSystemService;
     this.memoryStore = memoryStore;
+    this.gitService = gitService;
     this.commandHandler = new CommandHandler(
       fileSystemService,
       llmProvider,
       contextBuilder,
       projectManager,
-      memoryStore
+      memoryStore,
+      gitService
     );
     this.historyManager = new HistoryManager();
 
@@ -343,7 +350,7 @@ export class ChatPanel {
       '                </button>' +
       '            </div>' +
       '            <div class="input-hints">' +
-      '                <span class="hint">💡 Команды: /help, /scan, /roadmap generate, /checklist generate, /explain, /whereis</span>' +
+      '                <span class="hint">💡 Команды: /help, /scan, /diff, /whereis, /roadmap generate, /checklist generate, /explain</span>' +
       '            </div>' +
       '        </div>' +
       '    </div>' +
