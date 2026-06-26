@@ -176,7 +176,7 @@ export class MemoryStore implements IMemoryStore {
 
     if (result.length === 0) return [];
 
-    return result[0].values.map(row => this.rowToNode(result[0].columns, row));
+    return result[0].values.map((row: unknown[]) => this.rowToNode(result[0].columns, row));
   }
 
   async findEdges(options: FindEdgesOptions): Promise<GraphEdge[]> {
@@ -206,7 +206,7 @@ export class MemoryStore implements IMemoryStore {
 
     if (result.length === 0) return [];
 
-    return result[0].values.map(row => this.rowToEdge(result[0].columns, row));
+    return result[0].values.map((row: unknown[]) => this.rowToEdge(result[0].columns, row));
   }
 
   async getNodeByPath(filePath: string): Promise<GraphNode | null> {
