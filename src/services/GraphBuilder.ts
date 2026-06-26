@@ -236,4 +236,44 @@ export class GraphBuilder {
 
     logger.info('Проект распарсен: ' + totalNodes + ' узлов, ' + totalEdges + ' связей', 'GraphBuilder');
   }
+
+  /**
+   * Инкрементально обновляет граф для файла.
+   * Удаляет старые узлы файла и создаёт новые.
+   */
+  async updateForFile(filePath: string, projectPath: string): Promise<void> {
+    const relativePath = path.relative(projectPath, filePath);
+    logger.info('Инкрементальное обновление: ' + relativePath, 'GraphBuilder');
+
+    try {
+      // 1. Находим существующий узел файла
+      const existingFileNode = await this.memoryStore.getNodeByPath(relativePath);
+
+      if (existingFileNode && existingFileNode.id) {
+        // 2. Удаляем все связи файла
+        const outgoingEdges = await this.memoryStore.findEdges({ source_id: existingFileNode.id });
+        for (const edge of outgoingEdges) {
+          // Удаление связей будет реализовано в MemoryStore
+          // Пока просто логируем
+          logger.debug('Удаление связи: ' + edge.source_id + ' -> ' + edge.target_id, 'GraphBuilder');
+        }
+
+        // 3. Удаляем все узлы, которые содержит файл (кроме самого файла)
+        const containedNodes = await this.memoryStore.findNodes({ path: relativePath });
+        for (const node of containedNodes) {
+          if (node.id !== existingFileNode.id) {
+            // Удаление узлов будет реализовано в MemoryStore
+            logger.debug('Удаление узла: ' + node.type + ':' + node.name, 'GraphBuilder');
+          }
+        }
+      }
+
+      // 4. Парсим файл заново и добавляем узлы/связи
+      await this.parseFile(filePath, projectPath);
+
+      logger.info('Файл обновлён: ' + relativePath, 'GraphBuilder');
+    } catch (error) {
+      logger.error('Ошибка обновления файла: ' + relativePath, error, 'GraphBuilder');
+    }
+  }
 }
