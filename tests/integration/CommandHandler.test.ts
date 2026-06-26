@@ -19,14 +19,14 @@ describe('CommandHandler Integration Tests', () => {
   let testDir: string;
 
   const mockLLMProvider = {
-    generate: jest.fn()
+    generate: jest.fn(),
   } as unknown as LLMProvider;
 
   const mockContextBuilder = {
     buildContext: jest.fn().mockResolvedValue({
       systemPrompt: 'Test context',
-      metadata: {}
-    })
+      metadata: {},
+    }),
   } as unknown as ContextBuilder;
 
   beforeEach(async () => {
@@ -45,16 +45,12 @@ describe('CommandHandler Integration Tests', () => {
       'export function hello() { return "world"; }',
       'utf-8'
     );
-    await fs.writeFile(
-      path.join(testDir, 'package.json'),
-      '{"name": "test-project"}',
-      'utf-8'
-    );
+    await fs.writeFile(path.join(testDir, 'package.json'), '{"name": "test-project"}', 'utf-8');
 
     const mockFolder = {
       uri: { fsPath: testDir },
       name: 'test-project',
-      index: 0
+      index: 0,
     } as vscode.WorkspaceFolder;
 
     await projectManager.setProject(mockFolder);
@@ -88,6 +84,7 @@ describe('CommandHandler Integration Tests', () => {
       expect(result!.message).toContain('/roadmap');
       expect(result!.message).toContain('/whereis');
       expect(result!.message).toContain('/diff');
+      expect(result!.message).toContain('/memory show');
     });
   });
 
@@ -123,7 +120,7 @@ describe('CommandHandler Integration Tests', () => {
       (mockLLMProvider.generate as jest.Mock).mockResolvedValue({
         content: 'Это тестовое объяснение кода',
         tokensUsed: 100,
-        model: 'test-model'
+        model: 'test-model',
       });
     });
 
@@ -139,9 +136,7 @@ describe('CommandHandler Integration Tests', () => {
 
     it('объясняет выделенный код с разделителем ---', async () => {
       const selectedCode = 'function hello()';
-      const result = await commandHandler.handleMessage(
-        '/explain src/test.ts --- ' + selectedCode
-      );
+      const result = await commandHandler.handleMessage('/explain src/test.ts --- ' + selectedCode);
 
       expect(result).not.toBeNull();
       expect(result!.success).toBe(true);
@@ -165,7 +160,7 @@ describe('CommandHandler Integration Tests', () => {
       (mockLLMProvider.generate as jest.Mock).mockResolvedValue({
         content: '# Roadmap\n\n## Этап 1\n- Задача 1\n- Задача 2',
         tokensUsed: 500,
-        model: 'test-model'
+        model: 'test-model',
       });
     });
 
@@ -200,7 +195,7 @@ describe('CommandHandler Integration Tests', () => {
       (mockLLMProvider.generate as jest.Mock).mockResolvedValue({
         content: '# Чек-лист\n\n- [ ] `src/test.ts` — тестовый файл',
         tokensUsed: 300,
-        model: 'test-model'
+        model: 'test-model',
       });
     });
 
@@ -275,11 +270,7 @@ describe('CommandHandler Integration Tests', () => {
 
     it('поддерживает произвольный путь к файлу', async () => {
       await fs.mkdir(path.join(testDir, '.devil'), { recursive: true });
-      await fs.writeFile(
-        path.join(testDir, '.devil', 'custom.md'),
-        '# Custom\n\nContent',
-        'utf-8'
-      );
+      await fs.writeFile(path.join(testDir, '.devil', 'custom.md'), '# Custom\n\nContent', 'utf-8');
 
       const result = await commandHandler.handleMessage('/view custom.md');
 
@@ -311,7 +302,7 @@ describe('CommandHandler Integration Tests', () => {
         type: 'function',
         name: 'activate',
         path: 'src/extension.ts',
-        signature: 'export function activate(context: vscode.ExtensionContext)'
+        signature: 'export function activate(context: vscode.ExtensionContext)',
       });
 
       const result = await commandHandler.handleMessage('/whereis activate');
@@ -330,6 +321,47 @@ describe('CommandHandler Integration Tests', () => {
       expect(result).not.toBeNull();
       expect(result!.success).toBe(false);
       expect(result!.message).toContain('Использование');
+    });
+  });
+
+  describe('/memory show command', () => {
+    it('возвращает подсказку без аргумента show', async () => {
+      const result = await commandHandler.handleMessage('/memory');
+
+      expect(result).not.toBeNull();
+      expect(result!.success).toBe(false);
+      expect(result!.message).toContain('/memory show');
+    });
+
+    it('возвращает ошибку, если память пуста', async () => {
+      const result = await commandHandler.handleMessage('/memory show');
+
+      expect(result).not.toBeNull();
+      expect(result!.success).toBe(false);
+      expect(result!.message).toContain('Графовая память пуста');
+    });
+
+    it('показывает узлы в табличном виде', async () => {
+      await memoryStore.addNode({
+        type: 'function',
+        name: 'hello',
+        path: 'src/test.ts',
+      });
+      await memoryStore.addNode({
+        type: 'class',
+        name: 'MyClass',
+        path: 'src/test.ts',
+      });
+
+      const result = await commandHandler.handleMessage('/memory show');
+
+      expect(result).not.toBeNull();
+      expect(result!.success).toBe(true);
+      expect(result!.message).toContain('Графовая память проекта');
+      expect(result!.message).toContain('Всего узлов: **2**');
+      expect(result!.message).toContain('| Имя | Путь |');
+      expect(result!.message).toContain('hello');
+      expect(result!.message).toContain('MyClass');
     });
   });
 

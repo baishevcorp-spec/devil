@@ -61,6 +61,8 @@ export class CommandHandler {
         return await this.handleWhereis(args);
       case '/diff':
         return await this.handleDiff(args);
+      case '/memory':
+        return await this.handleMemory(args);
       case '/view':
         return await this.handleView(args);
       case '/help':
@@ -68,7 +70,8 @@ export class CommandHandler {
       default:
         return {
           success: false,
-          message: 'Неизвестная команда: ' + command + '\n\nВведите /help для списка доступных команд.'
+          message:
+            'Неизвестная команда: ' + command + '\n\nВведите /help для списка доступных команд.',
         };
     }
   }
@@ -77,7 +80,7 @@ export class CommandHandler {
     if (args.length === 0) {
       return {
         success: false,
-        message: 'Использование: /scan <путь_к_файлу>\n\nПример: /scan src/extension.ts'
+        message: 'Использование: /scan <путь_к_файлу>\n\nПример: /scan src/extension.ts',
       };
     }
 
@@ -87,7 +90,7 @@ export class CommandHandler {
     if (!project) {
       return {
         success: false,
-        message: 'Проект не открыт. Используйте команду "Devil: Open Project".'
+        message: 'Проект не открыт. Используйте команду "Devil: Open Project".',
       };
     }
 
@@ -98,7 +101,7 @@ export class CommandHandler {
       if (!exists) {
         return {
           success: false,
-          message: 'Файл не найден: ' + filePath
+          message: 'Файл не найден: ' + filePath,
         };
       }
 
@@ -106,14 +109,21 @@ export class CommandHandler {
 
       return {
         success: true,
-        message: '## Содержимое файла: ' + filePath + '\n\n```' + this.getLanguage(filePath) + '\n' + content + '\n```',
-        data: { path: filePath, content }
+        message:
+          '## Содержимое файла: ' +
+          filePath +
+          '\n\n```' +
+          this.getLanguage(filePath) +
+          '\n' +
+          content +
+          '\n```',
+        data: { path: filePath, content },
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        message: 'Ошибка чтения файла: ' + errorMessage
+        message: 'Ошибка чтения файла: ' + errorMessage,
       };
     }
   }
@@ -122,7 +132,8 @@ export class CommandHandler {
     if (args.length === 0 || args[0] !== 'generate') {
       return {
         success: false,
-        message: 'Использование: /roadmap generate\n\nСгенерирует план проекта на основе структуры файлов.'
+        message:
+          'Использование: /roadmap generate\n\nСгенерирует план проекта на основе структуры файлов.',
       };
     }
 
@@ -130,19 +141,25 @@ export class CommandHandler {
     if (!project) {
       return {
         success: false,
-        message: 'Проект не открыт.'
+        message: 'Проект не открыт.',
       };
     }
 
     try {
-      const context = await this.contextBuilder.buildContext('Сгенерируй подробный Roadmap для этого проекта', {
-        includeProjectStructure: true,
-        includeRoadmap: false,
-        includeChecklist: false
-      });
+      const context = await this.contextBuilder.buildContext(
+        'Сгенерируй подробный Roadmap для этого проекта',
+        {
+          includeProjectStructure: true,
+          includeRoadmap: false,
+          includeChecklist: false,
+        }
+      );
 
-      const prompt = 'Ты — опытный технический директор. Проанализируй структуру проекта и создай подробный Roadmap разработки.\n\n' +
-        'Структура проекта:\n' + context.systemPrompt + '\n\n' +
+      const prompt =
+        'Ты — опытный технический директор. Проанализируй структуру проекта и создай подробный Roadmap разработки.\n\n' +
+        'Структура проекта:\n' +
+        context.systemPrompt +
+        '\n\n' +
         'Создай Roadmap в формате Markdown с:\n' +
         '1. Кратким описанием проекта\n' +
         '2. Основными этапами разработки (с датами)\n' +
@@ -152,7 +169,7 @@ export class CommandHandler {
         'Отвечай на русском языке.';
 
       const response = await this.llmProvider.generate(prompt, {
-        systemPrompt: context.systemPrompt
+        systemPrompt: context.systemPrompt,
       });
 
       const roadmapPath = project.devilPath + '/roadmap.md';
@@ -161,13 +178,13 @@ export class CommandHandler {
       return {
         success: true,
         message: '✅ Roadmap сгенерирован и сохранён в `.devil/roadmap.md`\n\n' + response.content,
-        data: { path: roadmapPath, content: response.content }
+        data: { path: roadmapPath, content: response.content },
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        message: 'Ошибка генерации Roadmap: ' + errorMessage
+        message: 'Ошибка генерации Roadmap: ' + errorMessage,
       };
     }
   }
@@ -176,7 +193,7 @@ export class CommandHandler {
     if (args.length === 0 || args[0] !== 'generate') {
       return {
         success: false,
-        message: 'Использование: /checklist generate\n\nСгенерирует чек-лист файлов проекта.'
+        message: 'Использование: /checklist generate\n\nСгенерирует чек-лист файлов проекта.',
       };
     }
 
@@ -184,17 +201,20 @@ export class CommandHandler {
     if (!project) {
       return {
         success: false,
-        message: 'Проект не открыт.'
+        message: 'Проект не открыт.',
       };
     }
 
     try {
       const context = await this.contextBuilder.buildContext('Создай чек-лист файлов', {
-        includeProjectStructure: true
+        includeProjectStructure: true,
       });
 
-      const prompt = 'Ты — опытный разработчик. Создай чек-лист файлов проекта в формате Markdown.\n\n' +
-        'Структура проекта:\n' + context.systemPrompt + '\n\n' +
+      const prompt =
+        'Ты — опытный разработчик. Создай чек-лист файлов проекта в формате Markdown.\n\n' +
+        'Структура проекта:\n' +
+        context.systemPrompt +
+        '\n\n' +
         'Для каждого файла укажи:\n' +
         '- Путь к файлу\n' +
         '- Краткое описание назначения\n' +
@@ -204,7 +224,7 @@ export class CommandHandler {
         'Отвечай на русском языке.';
 
       const response = await this.llmProvider.generate(prompt, {
-        systemPrompt: context.systemPrompt
+        systemPrompt: context.systemPrompt,
       });
 
       const checklistPath = project.devilPath + '/checklist.md';
@@ -212,14 +232,15 @@ export class CommandHandler {
 
       return {
         success: true,
-        message: '✅ Чек-лист сгенерирован и сохранён в `.devil/checklist.md`\n\n' + response.content,
-        data: { path: checklistPath, content: response.content }
+        message:
+          '✅ Чек-лист сгенерирован и сохранён в `.devil/checklist.md`\n\n' + response.content,
+        data: { path: checklistPath, content: response.content },
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        message: 'Ошибка генерации чек-листа: ' + errorMessage
+        message: 'Ошибка генерации чек-листа: ' + errorMessage,
       };
     }
   }
@@ -228,7 +249,7 @@ export class CommandHandler {
     if (args.length === 0) {
       return {
         success: false,
-        message: 'Использование: /explain <путь_к_файлу>\n\nПример: /explain src/extension.ts'
+        message: 'Использование: /explain <путь_к_файлу>\n\nПример: /explain src/extension.ts',
       };
     }
 
@@ -238,7 +259,7 @@ export class CommandHandler {
     if (!project) {
       return {
         success: false,
-        message: 'Проект не открыт.'
+        message: 'Проект не открыт.',
       };
     }
 
@@ -249,22 +270,30 @@ export class CommandHandler {
       if (!exists) {
         return {
           success: false,
-          message: 'Файл не найден: ' + filePath
+          message: 'Файл не найден: ' + filePath,
         };
       }
 
       const content = await this.fileSystemService.readFile(fullPath);
       const context = await this.contextBuilder.buildContext('Объясни код', {
-        includeProjectStructure: true
+        includeProjectStructure: true,
       });
 
       const codeToExplain = selectedCode || content;
       const codeLabel = selectedCode ? 'выделенный фрагмент из файла' : 'весь файл';
 
-      const prompt = 'Ты — опытный разработчик. Объясни следующий код на русском языке.\n\n' +
-        'Файл: ' + filePath + ' (' + codeLabel + ')\n\n' +
-        '```' + this.getLanguage(filePath) + '\n' +
-        codeToExplain + '\n' +
+      const prompt =
+        'Ты — опытный разработчик. Объясни следующий код на русском языке.\n\n' +
+        'Файл: ' +
+        filePath +
+        ' (' +
+        codeLabel +
+        ')\n\n' +
+        '```' +
+        this.getLanguage(filePath) +
+        '\n' +
+        codeToExplain +
+        '\n' +
         '```\n\n' +
         'Объясни:\n' +
         '1. Что делает этот код\n' +
@@ -274,19 +303,19 @@ export class CommandHandler {
         'Будь краток и по делу.';
 
       const response = await this.llmProvider.generate(prompt, {
-        systemPrompt: context.systemPrompt
+        systemPrompt: context.systemPrompt,
       });
 
       return {
         success: true,
         message: '## Объяснение кода: ' + filePath + '\n\n' + response.content,
-        data: { path: filePath, explanation: response.content }
+        data: { path: filePath, explanation: response.content },
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        message: 'Ошибка объяснения кода: ' + errorMessage
+        message: 'Ошибка объяснения кода: ' + errorMessage,
       };
     }
   }
@@ -295,7 +324,8 @@ export class CommandHandler {
     if (args.length === 0) {
       return {
         success: false,
-        message: 'Использование: /whereis <имя_символа>\n\nПример: /whereis activate\n\nИщет функции, классы, интерфейсы и переменные по имени.'
+        message:
+          'Использование: /whereis <имя_символа>\n\nПример: /whereis activate\n\nИщет функции, классы, интерфейсы и переменные по имени.',
       };
     }
 
@@ -307,8 +337,11 @@ export class CommandHandler {
       if (nodes.length === 0) {
         return {
           success: false,
-          message: 'Символ "' + symbolName + '" не найден в графе проекта.\n\n' +
-            'Возможно, проект ещё не просканирован. Используйте команду "Devil: Open Project" для инициализации.'
+          message:
+            'Символ "' +
+            symbolName +
+            '" не найден в графе проекта.\n\n' +
+            'Возможно, проект ещё не просканирован. Используйте команду "Devil: Open Project" для инициализации.',
         };
       }
 
@@ -321,7 +354,7 @@ export class CommandHandler {
         byType[node.type].push({
           name: node.name,
           path: node.path,
-          signature: node.signature
+          signature: node.signature,
         });
       }
 
@@ -330,12 +363,12 @@ export class CommandHandler {
       lines.push('');
 
       const typeLabels: Record<string, string> = {
-        'function': 'Функции',
-        'class': 'Классы',
-        'interface': 'Интерфейсы',
-        'type': 'Типы',
-        'variable': 'Переменные',
-        'file': 'Файлы'
+        function: 'Функции',
+        class: 'Классы',
+        interface: 'Интерфейсы',
+        type: 'Типы',
+        variable: 'Переменные',
+        file: 'Файлы',
       };
 
       for (const [type, items] of Object.entries(byType)) {
@@ -357,13 +390,13 @@ export class CommandHandler {
       return {
         success: true,
         message: lines.join('\n'),
-        data: { symbol: symbolName, count: nodes.length, nodes }
+        data: { symbol: symbolName, count: nodes.length, nodes },
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        message: 'Ошибка поиска символа: ' + errorMessage
+        message: 'Ошибка поиска символа: ' + errorMessage,
       };
     }
   }
@@ -382,17 +415,18 @@ export class CommandHandler {
       } else {
         return {
           success: false,
-          message: 'Использование:\n' +
+          message:
+            'Использование:\n' +
             '- `/diff` — показать последние изменения\n' +
             '- `/diff <commit>` — показать изменения в коммите\n' +
-            '- `/diff <commitA> <commitB>` — показать diff между коммитами'
+            '- `/diff <commitA> <commitB>` — показать diff между коммитами',
         };
       }
 
       if (!diffContent || diffContent.trim() === '') {
         return {
           success: false,
-          message: 'Diff пуст или коммиты не найдены.'
+          message: 'Diff пуст или коммиты не найдены.',
         };
       }
 
@@ -416,13 +450,90 @@ export class CommandHandler {
       return {
         success: true,
         message: markdown,
-        data: { diff: diffContent }
+        data: { diff: diffContent },
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        message: 'Ошибка получения diff: ' + errorMessage
+        message: 'Ошибка получения diff: ' + errorMessage,
+      };
+    }
+  }
+
+  private async handleMemory(args: string[]): Promise<CommandResult> {
+    if (args.length === 0 || args[0] !== 'show') {
+      return {
+        success: false,
+        message:
+          'Использование: /memory show\n\nПоказать графовую память проекта в табличном виде.',
+      };
+    }
+
+    try {
+      const nodes = await this.memoryStore.findNodes({ limit: 50 });
+
+      if (nodes.length === 0) {
+        return {
+          success: false,
+          message: 'Графовая память пуста. Проект ещё не просканирован.',
+        };
+      }
+
+      // Группируем узлы по типу
+      const byType: Record<string, typeof nodes> = {};
+      for (const node of nodes) {
+        if (!byType[node.type]) {
+          byType[node.type] = [];
+        }
+        byType[node.type].push(node);
+      }
+
+      const lines: string[] = [];
+      lines.push('## Графовая память проекта');
+      lines.push('');
+      lines.push('Всего узлов: **' + nodes.length + '**');
+      lines.push('');
+
+      const typeLabels: Record<string, string> = {
+        file: 'Файлы',
+        class: 'Классы',
+        function: 'Функции',
+        interface: 'Интерфейсы',
+        type: 'Типы',
+        variable: 'Переменные',
+      };
+
+      for (const [type, typeNodes] of Object.entries(byType)) {
+        const label = typeLabels[type] || type;
+        lines.push('### ' + label + ' (' + typeNodes.length + ')');
+        lines.push('');
+        lines.push('| Имя | Путь |');
+        lines.push('|-----|------|');
+
+        for (const node of typeNodes.slice(0, 20)) {
+          const name = node.name || '';
+          const path = node.path || '';
+          lines.push('| `' + name + '` | `' + path + '` |');
+        }
+
+        if (typeNodes.length > 20) {
+          lines.push('| ... | и ещё ' + (typeNodes.length - 20) + ' |');
+        }
+
+        lines.push('');
+      }
+
+      return {
+        success: true,
+        message: lines.join('\n'),
+        data: { nodes, count: nodes.length },
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: 'Ошибка получения памяти: ' + errorMessage,
       };
     }
   }
@@ -431,10 +542,11 @@ export class CommandHandler {
     if (args.length === 0) {
       return {
         success: false,
-        message: 'Использование:\n' +
+        message:
+          'Использование:\n' +
           '- `/view roadmap` — показать Roadmap проекта\n' +
           '- `/view checklist` — показать чек-лист файлов\n' +
-          '- `/view <путь>` — показать любой Markdown-файл из .devil/'
+          '- `/view <путь>` — показать любой Markdown-файл из .devil/',
       };
     }
 
@@ -442,7 +554,7 @@ export class CommandHandler {
     if (!project) {
       return {
         success: false,
-        message: 'Проект не открыт. Используйте команду "Devil: Open Project".'
+        message: 'Проект не открыт. Используйте команду "Devil: Open Project".',
       };
     }
 
@@ -464,8 +576,11 @@ export class CommandHandler {
       if (!exists) {
         return {
           success: false,
-          message: 'Файл не найден: .devil/' + filePath + '\n\n' +
-            'Используйте `/roadmap generate` или `/checklist generate` для создания файла.'
+          message:
+            'Файл не найден: .devil/' +
+            filePath +
+            '\n\n' +
+            'Используйте `/roadmap generate` или `/checklist generate` для создания файла.',
         };
       }
 
@@ -473,7 +588,7 @@ export class CommandHandler {
 
       let header = '## Содержимое файла: .devil/' + filePath;
       if (fileName === 'roadmap') {
-        header = '## 🗺️ Roadmap проекта';
+        header = '## ️ Roadmap проекта';
       } else if (fileName === 'checklist') {
         header = '## ✅ Чек-лист файлов проекта';
       }
@@ -481,13 +596,13 @@ export class CommandHandler {
       return {
         success: true,
         message: header + '\n\n' + fileContent,
-        data: { path: fullPath, content: fileContent }
+        data: { path: fullPath, content: fileContent },
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        message: 'Ошибка чтения файла: ' + errorMessage
+        message: 'Ошибка чтения файла: ' + errorMessage,
       };
     }
   }
@@ -499,6 +614,7 @@ export class CommandHandler {
       '**Файлы:**',
       '- `/diff [commit]` — показать изменения в коде',
       '- `/whereis <символ>` — найти символ в проекте',
+      '- `/memory show` — показать графовую память',
       '- `/view roadmap` — показать Roadmap проекта',
       '- `/view checklist` — показать чек-лист',
       '- `/scan <путь>` — прочитать содержимое файла',
@@ -513,30 +629,30 @@ export class CommandHandler {
       '',
       'Все команды начинаются с `/` и вводятся в чат.',
       '',
-      '**Совет:** Выделите код в редакторе, нажмите правую кнопку мыши и выберите "Объяснить код с Devil".'
+      '**Совет:** Выделите код в редакторе, нажмите правую кнопку мыши и выберите "Объяснить код с Devil".',
     ].join('\n');
 
     return {
       success: true,
-      message: helpText
+      message: helpText,
     };
   }
 
   private getLanguage(filePath: string): string {
     const ext = filePath.split('.').pop()?.toLowerCase();
     const langMap: Record<string, string> = {
-      'ts': 'typescript',
-      'tsx': 'typescript',
-      'js': 'javascript',
-      'jsx': 'javascript',
-      'py': 'python',
-      'json': 'json',
-      'md': 'markdown',
-      'html': 'html',
-      'css': 'css',
-      'sql': 'sql',
-      'sh': 'bash',
-      'bash': 'bash'
+      ts: 'typescript',
+      tsx: 'typescript',
+      js: 'javascript',
+      jsx: 'javascript',
+      py: 'python',
+      json: 'json',
+      md: 'markdown',
+      html: 'html',
+      css: 'css',
+      sql: 'sql',
+      sh: 'bash',
+      bash: 'bash',
     };
     return langMap[ext || ''] || 'text';
   }
