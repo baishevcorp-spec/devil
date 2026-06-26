@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { FileSystemService } from './FileSystemService';
-import { IMemoryStore, GraphNode, GraphEdge, NodeType } from '../interfaces/IMemoryStore';
+import { IMemoryStore, GraphNode, GraphEdge } from '../interfaces/IMemoryStore';
 import { logger } from '../utils/logger';
 
 /**
@@ -13,7 +13,7 @@ export interface ParseResult {
 
 /**
  * GraphBuilder — парсинг кода для построения графа проекта.
- * 
+ *
  * Использует RegExp для извлечения:
  * - import statements
  * - class declarations
@@ -34,7 +34,7 @@ export class GraphBuilder {
    */
   async parseFile(filePath: string, projectPath: string): Promise<ParseResult> {
     const relativePath = path.relative(projectPath, filePath);
-    
+
     try {
       const content = await this.fileSystemService.readFile(filePath);
       const nodes: GraphNode[] = [];
@@ -58,7 +58,7 @@ export class GraphBuilder {
       const ext = path.extname(filePath).toLowerCase();
       if (['.ts', '.tsx', '.js', '.jsx'].includes(ext)) {
         const parsedNodes = this.parseCode(content, relativePath);
-        
+
         // Добавляем узлы и создаём связи "contains"
         for (const node of parsedNodes) {
           const nodeId = await this.memoryStore.addNode(node);
@@ -73,7 +73,7 @@ export class GraphBuilder {
           });
         }
 
-        // Парсим импорты и создаём связи
+        // Парсим импорты и создаём связ��
         const imports = this.parseImports(content);
         for (const importPath of imports) {
           // Пытаемся найти файл по импорту
@@ -207,11 +207,11 @@ export class GraphBuilder {
   private matchAll(regex: RegExp, content: string): RegExpExecArray[] {
     const matches: RegExpExecArray[] = [];
     let match: RegExpExecArray | null;
-    
+
     while ((match = regex.exec(content)) !== null) {
       matches.push(match);
     }
-    
+
     return matches;
   }
 
