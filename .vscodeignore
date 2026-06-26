@@ -35,6 +35,7 @@ node_modules/**
 !node_modules/axios/**
 !node_modules/marked/**
 !node_modules/highlight.js/**
+!node_modules/sql.js/**
 
 # Coverage
 coverage/**
