@@ -3,6 +3,9 @@ import { logger } from '../utils/logger';
 import { LLMProvider } from '../services/LLMProvider';
 import { ContextBuilder } from '../services/ContextBuilder';
 import { ProjectManager } from '../services/ProjectManager';
+import { FileSystemService } from '../services/FileSystemService';
+import { CommandHandler } from '../commands/CommandHandler';
+import { HistoryManager } from '../services/HistoryManager';
 
 /**
  * Сообщение от Webview к Extension.
@@ -18,9 +21,10 @@ export interface WebviewMessage {
  * Сообщение от Extension к Webview.
  */
 export interface ExtensionMessage {
-  type: 'agentResponse' | 'error';
+  type: 'agentResponse' | 'error' | 'history' | 'commandResult';
   content?: string;
   text?: string;
+  messages?: Array<{ role: string; content: string }>;
 }
 
 /**
@@ -33,16 +37,20 @@ export class ChatPanel {
   private readonly _panel: vscode.WebviewPanel;
   private readonly _extensionUri: vscode.Uri;
   private _disposables: vscode.Disposable[] = [];
-  
-  private llmProvider: LLMProvider;
-  private contextBuilder: ContextBuilder;
-  private projectManager: ProjectManager;
+
+  private readonly llmProvider: LLMProvider;
+  private readonly contextBuilder: ContextBuilder;
+  private readonly projectManager: ProjectManager;
+  private readonly fileSystemService: FileSystemService;
+  private readonly commandHandler: CommandHandler;
+  private readonly historyManager: HistoryManager;
 
   public static createOrShow(
     extensionUri: vscode.Uri,
     llmProvider: LLMProvider,
     contextBuilder: ContextBuilder,
-    projectManager: ProjectManager
+    projectManager: ProjectManager,
+    fileSystemService: FileSystemService
   ): ChatPanel {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
@@ -60,11 +68,21 @@ export class ChatPanel {
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'webview'), vscode.Uri.joinPath(extensionUri, 'node_modules')]
+        localResourceRoots: [
+          vscode.Uri.joinPath(extensionUri, 'webview'),
+          vscode.Uri.joinPath(extensionUri, 'node_modules')
+        ]
       }
     );
 
-    ChatPanel.currentPanel = new ChatPanel(panel, extensionUri, llmProvider, contextBuilder, projectManager);
+    ChatPanel.currentPanel = new ChatPanel(
+      panel,
+      extensionUri,
+      llmProvider,
+      contextBuilder,
+      projectManager,
+      fileSystemService
+    );
     return ChatPanel.currentPanel;
   }
 
@@ -73,14 +91,24 @@ export class ChatPanel {
     extensionUri: vscode.Uri,
     llmProvider: LLMProvider,
     contextBuilder: ContextBuilder,
-    projectManager: ProjectManager
+    projectManager: ProjectManager,
+    fileSystemService: FileSystemService
   ) {
     this._panel = panel;
     this._extensionUri = extensionUri;
     this.llmProvider = llmProvider;
     this.contextBuilder = contextBuilder;
     this.projectManager = projectManager;
+    this.fileSystemService = fileSystemService;
+    this.commandHandler = new CommandHandler(
+      fileSystemService,
+      llmProvider,
+      contextBuilder,
+      projectManager
+    );
+    this.historyManager = new HistoryManager();
 
+    this._initializeHistory();
     this._update();
 
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
@@ -96,40 +124,101 @@ export class ChatPanel {
     logger.info('ChatPanel создан', 'ChatPanel');
   }
 
-  private async _handleMessage(message: WebviewMessage): Promise<void> {
-    switch (message.type) {
-      case 'userMessage':
-        logger.info('Получено сообщение от пользователя: ' + message.content, 'ChatPanel');
-        await this._processUserMessage(message.content || '');
-        break;
-      case 'alert':
-        if (message.text) {
-          vscode.window.showErrorMessage(message.text);
+  /**
+   * Инициализирует HistoryManager для текущего проекта.
+   */
+  private async _initializeHistory(): Promise<void> {
+    const project = this.projectManager.getCurrentProject();
+    if (project) {
+      try {
+        await this.historyManager.initialize(project.path);
+        // Отправляем сохранённую историю в Webview
+        const messages = this.historyManager.getMessages();
+        if (messages.length > 0) {
+          this.sendMessage({
+            type: 'history',
+            messages: messages.map(m => ({ role: m.role, content: m.content }))
+          });
         }
-        return;
+      } catch (error) {
+        logger.error('Не удалось инициализировать HistoryManager', error, 'ChatPanel');
+      }
     }
   }
 
+  /**
+   * Обрабатывает сообщения от Webview.
+   */
+  private async _handleMessage(message: WebviewMessage): Promise<void> {
+    switch (message.type) {
+      case 'userMessage': {
+        const content = message.content || '';
+        logger.info('Получено сообщение: ' + content.substring(0, 50), 'ChatPanel');
+
+        // Сохраняем сообщение пользователя в историю
+        await this.historyManager.addMessage('user', content);
+
+        // Проверяем, является ли сообщение командой
+        const commandResult = await this.commandHandler.handleMessage(content);
+        if (commandResult) {
+          // Это была команда — отправляем результат
+          await this.historyManager.addMessage('assistant', commandResult.message, {
+            command: commandResult.success ? 'success' : 'error'
+          });
+          this.sendMessage({
+            type: 'agentResponse',
+            content: commandResult.message
+          });
+          return;
+        }
+
+        // Обычное сообщение — отправляем в LLM
+        await this._processUserMessage(content);
+        break;
+      }
+      case 'clearHistory': {
+        await this.historyManager.clearHistory();
+        logger.info('История очищена', 'ChatPanel');
+        break;
+      }
+      case 'alert': {
+        if (message.text) {
+          vscode.window.showErrorMessage(message.text);
+        }
+        break;
+      }
+    }
+  }
+
+  /**
+   * Обрабатывает обычное сообщение пользователя (не команду).
+   */
   private async _processUserMessage(content: string): Promise<void> {
     try {
-      // Строим контекст
       const context = await this.contextBuilder.buildContext(content, {
         includeProjectStructure: true,
         includeRoadmap: true,
         includeChecklist: true,
-        includeMemoryGraph: false // Пока не реализовано
+        includeMemoryGraph: false
       });
 
-      logger.info('Контекст построен (длина: ' + context.systemPrompt.length + ' символов)', 'ChatPanel');
+      logger.info(
+        'Контекст построен (длина: ' + context.systemPrompt.length + ' символов)',
+        'ChatPanel'
+      );
 
-      // Отправляем запрос к LLM
       const response = await this.llmProvider.generate(content, {
         systemPrompt: context.systemPrompt
       });
 
       logger.info('Получен ответ от LLM (токенов: ' + response.tokensUsed + ')', 'ChatPanel');
 
-      // Отправляем ответ в Webview
+      // Сохраняем ответ в историю
+      await this.historyManager.addMessage('assistant', response.content, {
+        tokensUsed: response.tokensUsed,
+        model: response.model
+      });
+
       this.sendMessage({
         type: 'agentResponse',
         content: response.content
@@ -137,7 +226,9 @@ export class ChatPanel {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error('Ошибка при обработке сообщения', error, 'ChatPanel');
-      
+
+      await this.historyManager.addMessage('assistant', 'Ошибка: ' + errorMessage);
+
       this.sendMessage({
         type: 'error',
         text: errorMessage
@@ -145,10 +236,16 @@ export class ChatPanel {
     }
   }
 
+  /**
+   * Отправляет сообщение в Webview.
+   */
   public sendMessage(message: ExtensionMessage): void {
     this._panel.webview.postMessage(message);
   }
 
+  /**
+   * Освобождает ресурсы.
+   */
   public dispose(): void {
     ChatPanel.currentPanel = undefined;
     this._panel.dispose();
@@ -173,9 +270,11 @@ export class ChatPanel {
     const styleUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this._extensionUri, 'webview', 'chat.css')
     );
-
+    const scriptUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'webview', 'chat.js')
+    );
     const markedUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'marked', 'marked.min.js')
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'marked', 'lib', 'marked.umd.js')
     );
     const highlightUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'core.js')
@@ -200,9 +299,6 @@ export class ChatPanel {
     );
     const highlightStylesUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'styles', 'github-dark.css')
-    );
-    const scriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'webview', 'chat.js')
     );
 
     const nonce = getNonce();
@@ -263,7 +359,7 @@ export class ChatPanel {
       '                </button>' +
       '            </div>' +
       '            <div class="input-hints">' +
-      '                <span class="hint">💡 Команды: /explain, /refactor, /roadmap, /whereis, /scan</span>' +
+      '                <span class="hint">💡 Команды: /help, /scan, /roadmap generate, /checklist generate, /explain</span>' +
       '            </div>' +
       '        </div>' +
       '    </div>' +
@@ -285,7 +381,7 @@ function getNonce(): string {
   let text = '';
   const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   for (let i = 0; i < 32; i++) {
-    text += possible.charAt(Math.random() * possible.length);
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
   }
   return text;
 }
