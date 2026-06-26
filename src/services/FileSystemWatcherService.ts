@@ -12,7 +12,7 @@ type FileChangeCallback = (change: FileChange) => void;
 
 /**
  * FileSystemWatcherService — обёртка над VS Code FileSystemWatcher.
- * 
+ *
  * Отвечает за:
  * - Отслеживание изменений файлов в проекте
  * - Debounce событий (500мс) для автосохранения
@@ -56,7 +56,7 @@ export class FileSystemWatcherService {
     if (this.watcher) {
       this.watcher.dispose();
       this.watcher = null;
-      
+
       this.debounceTimers.forEach(timer => clearTimeout(timer));
       this.debounceTimers.clear();
 
@@ -98,7 +98,7 @@ export class FileSystemWatcherService {
    */
   private notifyCallbacks(change: FileChange): void {
     logger.debug('Изменение файла: ' + change.type + ' ' + change.path, 'FileSystemWatcherService');
-    
+
     for (const callback of this.callbacks) {
       try {
         callback(change);
