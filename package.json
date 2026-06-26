@@ -83,6 +83,11 @@
         "command": "devil.openProject",
         "title": "Devil: Open Project",
         "category": "Devil"
+      },
+      {
+        "command": "devil.explainSelection",
+        "title": "Объяснить код с Devil",
+        "category": "Devil"
       }
     ],
     "configuration": {
@@ -127,6 +132,15 @@
           "description": "Включить DEBUG-логи в Output Channel \"Devil\"."
         }
       }
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "devil.explainSelection",
+          "when": "editorHasSelection",
+          "group": "devil@1"
+        }
+      ]
     }
   }
 }

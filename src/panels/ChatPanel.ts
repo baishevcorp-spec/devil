@@ -7,9 +7,6 @@ import { FileSystemService } from '../services/FileSystemService';
 import { CommandHandler } from '../commands/CommandHandler';
 import { HistoryManager } from '../services/HistoryManager';
 
-/**
- * Сообщение от Webview к Extension.
- */
 export interface WebviewMessage {
   type: string;
   content?: string;
@@ -17,19 +14,13 @@ export interface WebviewMessage {
   [key: string]: unknown;
 }
 
-/**
- * Сообщение от Extension к Webview.
- */
 export interface ExtensionMessage {
-  type: 'agentResponse' | 'error' | 'history' | 'commandResult';
+  type: 'agentResponse' | 'error' | 'history' | 'commandResult' | 'executeCommand';
   content?: string;
   text?: string;
   messages?: Array<{ role: string; content: string }>;
 }
 
-/**
- * ChatPanel — управляет Webview-панелью чата.
- */
 export class ChatPanel {
   public static currentPanel: ChatPanel | undefined;
   public static readonly viewType = 'devilChat';
@@ -70,8 +61,8 @@ export class ChatPanel {
         retainContextWhenHidden: true,
         localResourceRoots: [
           vscode.Uri.joinPath(extensionUri, 'webview'),
-          vscode.Uri.joinPath(extensionUri, 'node_modules')
-        ]
+          vscode.Uri.joinPath(extensionUri, 'node_modules'),
+        ],
       }
     );
 
@@ -124,20 +115,16 @@ export class ChatPanel {
     logger.info('ChatPanel создан', 'ChatPanel');
   }
 
-  /**
-   * Инициализирует HistoryManager для текущего проекта.
-   */
   private async _initializeHistory(): Promise<void> {
     const project = this.projectManager.getCurrentProject();
     if (project) {
       try {
         await this.historyManager.initialize(project.path);
-        // Отправляем сохранённую историю в Webview
         const messages = this.historyManager.getMessages();
         if (messages.length > 0) {
           this.sendMessage({
             type: 'history',
-            messages: messages.map(m => ({ role: m.role, content: m.content }))
+            messages: messages.map((m) => ({ role: m.role, content: m.content })),
           });
         }
       } catch (error) {
@@ -146,34 +133,34 @@ export class ChatPanel {
     }
   }
 
-  /**
-   * Обрабатывает сообщения от Webview.
-   */
   private async _handleMessage(message: WebviewMessage): Promise<void> {
     switch (message.type) {
       case 'userMessage': {
         const content = message.content || '';
         logger.info('Получено сообщение: ' + content.substring(0, 50), 'ChatPanel');
 
-        // Сохраняем сообщение пользователя в историю
         await this.historyManager.addMessage('user', content);
 
-        // Проверяем, является ли сообщение командой
         const commandResult = await this.commandHandler.handleMessage(content);
         if (commandResult) {
-          // Это была команда — отправляем результат
           await this.historyManager.addMessage('assistant', commandResult.message, {
-            command: commandResult.success ? 'success' : 'error'
+            command: commandResult.success ? 'success' : 'error',
           });
           this.sendMessage({
             type: 'agentResponse',
-            content: commandResult.message
+            content: commandResult.message,
           });
           return;
         }
 
-        // Обычное сообщение — отправляем в LLM
         await this._processUserMessage(content);
+        break;
+      }
+      case 'executeCommand': {
+        if (message.content) {
+          logger.info('Выполнение команды из контекстного меню', 'ChatPanel');
+          await this._handleMessage({ type: 'userMessage', content: message.content });
+        }
         break;
       }
       case 'clearHistory': {
@@ -190,16 +177,13 @@ export class ChatPanel {
     }
   }
 
-  /**
-   * Обрабатывает обычное сообщение пользователя (не команду).
-   */
   private async _processUserMessage(content: string): Promise<void> {
     try {
       const context = await this.contextBuilder.buildContext(content, {
         includeProjectStructure: true,
         includeRoadmap: true,
         includeChecklist: true,
-        includeMemoryGraph: false
+        includeMemoryGraph: false,
       });
 
       logger.info(
@@ -208,20 +192,19 @@ export class ChatPanel {
       );
 
       const response = await this.llmProvider.generate(content, {
-        systemPrompt: context.systemPrompt
+        systemPrompt: context.systemPrompt,
       });
 
       logger.info('Получен ответ от LLM (токенов: ' + response.tokensUsed + ')', 'ChatPanel');
 
-      // Сохраняем ответ в историю
       await this.historyManager.addMessage('assistant', response.content, {
         tokensUsed: response.tokensUsed,
-        model: response.model
+        model: response.model,
       });
 
       this.sendMessage({
         type: 'agentResponse',
-        content: response.content
+        content: response.content,
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -231,21 +214,15 @@ export class ChatPanel {
 
       this.sendMessage({
         type: 'error',
-        text: errorMessage
+        text: errorMessage,
       });
     }
   }
 
-  /**
-   * Отправляет сообщение в Webview.
-   */
   public sendMessage(message: ExtensionMessage): void {
     this._panel.webview.postMessage(message);
   }
 
-  /**
-   * Освобождает ресурсы.
-   */
   public dispose(): void {
     ChatPanel.currentPanel = undefined;
     this._panel.dispose();
@@ -280,25 +257,73 @@ export class ChatPanel {
       vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'core.js')
     );
     const highlightLangTypescript = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'typescript.js')
+      vscode.Uri.joinPath(
+        this._extensionUri,
+        'node_modules',
+        'highlight.js',
+        'lib',
+        'languages',
+        'typescript.js'
+      )
     );
     const highlightLangJavascript = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'javascript.js')
+      vscode.Uri.joinPath(
+        this._extensionUri,
+        'node_modules',
+        'highlight.js',
+        'lib',
+        'languages',
+        'javascript.js'
+      )
     );
     const highlightLangPython = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'python.js')
+      vscode.Uri.joinPath(
+        this._extensionUri,
+        'node_modules',
+        'highlight.js',
+        'lib',
+        'languages',
+        'python.js'
+      )
     );
     const highlightLangJson = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'json.js')
+      vscode.Uri.joinPath(
+        this._extensionUri,
+        'node_modules',
+        'highlight.js',
+        'lib',
+        'languages',
+        'json.js'
+      )
     );
     const highlightLangBash = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'bash.js')
+      vscode.Uri.joinPath(
+        this._extensionUri,
+        'node_modules',
+        'highlight.js',
+        'lib',
+        'languages',
+        'bash.js'
+      )
     );
     const highlightLangSql = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'sql.js')
+      vscode.Uri.joinPath(
+        this._extensionUri,
+        'node_modules',
+        'highlight.js',
+        'lib',
+        'languages',
+        'sql.js'
+      )
     );
     const highlightStylesUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'styles', 'github-dark.css')
+      vscode.Uri.joinPath(
+        this._extensionUri,
+        'node_modules',
+        'highlight.js',
+        'styles',
+        'github-dark.css'
+      )
     );
 
     const nonce = getNonce();
@@ -309,18 +334,25 @@ export class ChatPanel {
       "script-src 'nonce-" + nonce + "'",
       'font-src ' + webview.cspSource,
       'img-src ' + webview.cspSource + ' https:',
-      'connect-src https:'
+      'connect-src https:',
     ].join('; ');
 
-    return '<!DOCTYPE html>' +
+    return (
+      '<!DOCTYPE html>' +
       '<html lang="ru">' +
       '<head>' +
       '    <meta charset="UTF-8">' +
       '    <meta name="viewport" content="width=device-width, initial-scale=1.0">' +
-      '    <meta http-equiv="Content-Security-Policy" content="' + csp + '">' +
+      '    <meta http-equiv="Content-Security-Policy" content="' +
+      csp +
+      '">' +
       '    <title>Devil Chat</title>' +
-      '    <link rel="stylesheet" href="' + styleUri + '">' +
-      '    <link rel="stylesheet" href="' + highlightStylesUri + '">' +
+      '    <link rel="stylesheet" href="' +
+      styleUri +
+      '">' +
+      '    <link rel="stylesheet" href="' +
+      highlightStylesUri +
+      '">' +
       '</head>' +
       '<body>' +
       '    <div class="chat-container">' +
@@ -331,8 +363,8 @@ export class ChatPanel {
       '                <span class="project-path">Загрузка...</span>' +
       '            </div>' +
       '            <div class="header-actions">' +
-      '                <button class="icon-button" title="Очистить историю">🗑️</button>' +
-      '                <button class="icon-button" title="Настройки">⚙️</button>' +
+      '                <button class="icon-button" title="Очистить историю">️</button>' +
+      '                <button class="icon-button" title="Настройки">️</button>' +
       '            </div>' +
       '        </div>' +
       '        <div class="messages-area" id="messagesArea">' +
@@ -351,7 +383,7 @@ export class ChatPanel {
       '                <textarea ' +
       '                    id="messageInput" ' +
       '                    class="message-input" ' +
-      '                    placeholder="Введите сообщение или команду (например, /explain, /roadmap, /whereis)..." ' +
+      '                    placeholder="Введите сообщение или команду (например, /help, /explain, /roadmap)..." ' +
       '                    rows="3"' +
       '                ></textarea>' +
       '                <button class="send-button" id="sendButton" title="Отправить (Enter)">' +
@@ -363,17 +395,54 @@ export class ChatPanel {
       '            </div>' +
       '        </div>' +
       '    </div>' +
-      '    <script nonce="' + nonce + '" src="' + markedUri + '"></script>' +
-      '    <script nonce="' + nonce + '" src="' + highlightUri + '"></script>' +
-      '    <script nonce="' + nonce + '" src="' + highlightLangTypescript + '"></script>' +
-      '    <script nonce="' + nonce + '" src="' + highlightLangJavascript + '"></script>' +
-      '    <script nonce="' + nonce + '" src="' + highlightLangPython + '"></script>' +
-      '    <script nonce="' + nonce + '" src="' + highlightLangJson + '"></script>' +
-      '    <script nonce="' + nonce + '" src="' + highlightLangBash + '"></script>' +
-      '    <script nonce="' + nonce + '" src="' + highlightLangSql + '"></script>' +
-      '    <script nonce="' + nonce + '" src="' + scriptUri + '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      markedUri +
+      '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      highlightUri +
+      '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      highlightLangTypescript +
+      '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      highlightLangJavascript +
+      '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      highlightLangPython +
+      '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      highlightLangJson +
+      '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      highlightLangBash +
+      '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      highlightLangSql +
+      '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      scriptUri +
+      '"></script>' +
       '</body>' +
-      '</html>';
+      '</html>'
+    );
   }
 }
 

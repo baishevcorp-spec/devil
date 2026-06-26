@@ -1,43 +1,31 @@
-// @ts-nocheck
 (function () {
   // @ts-ignore
   const vscode = acquireVsCodeApi();
 
-    console.log('vscode API:', typeof vscode !== 'undefined');
-  
-  
-  if (typeof hljs === 'undefined') {
-    console.error('ERROR: hljs library not loaded!');
-  }
-
-const messageInput = document.getElementById('messageInput');
-  
-  const clearButton = document.querySelector('.header-actions button[title="Очистить историю"]');
-  if (clearButton) {
-    clearButton.addEventListener('click', clearHistory);
-  }
-  
-  const sendButton = document.getElementById('sendButton');
+  const messageInput = document.getElementById('messageInput');
+  const sendButton = document.getElementById('sendButton'); // Убрано дублирование
   const messagesArea = document.getElementById('messagesArea');
 
-  
   // Загружаем историю из state
   const savedState = vscode.getState();
   if (savedState && savedState.messages) {
-    savedState.messages.forEach(msg => {
-      addMessage(msg.role, msg.content, false);
+    savedState.messages.forEach(function (msg) {
+      addMessage(msg.role, msg.content, false); // false — не сохранять повторно
     });
   }
 
-  // Инициализация marked
-  if (typeof marked !== 'undefined') {
+  // Инициализация marked (без падений)
+  const markedAvailable = typeof marked !== 'undefined';
+  const hljsAvailable = typeof hljs !== 'undefined';
+
+  if (markedAvailable) {
     marked.setOptions({
       breaks: true,
       gfm: true,
       headerIds: false,
       mangle: false,
-      highlight: function(code, lang) {
-        if (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang)) {
+      highlight: function (code, lang) {
+        if (hljsAvailable && lang && hljs.getLanguage(lang)) {
           try {
             return hljs.highlight(code, { language: lang }).value;
           } catch (err) {
@@ -45,8 +33,14 @@ const messageInput = document.getElementById('messageInput');
           }
         }
         return code;
-      }
+      },
     });
+  }
+
+  // Кнопка очистки
+  const clearButton = document.querySelector('.header-actions button[title="Очистить историю"]');
+  if (clearButton) {
+    clearButton.addEventListener('click', clearHistory);
   }
 
   // Auto-resize textarea
@@ -55,7 +49,7 @@ const messageInput = document.getElementById('messageInput');
     this.style.height = Math.min(this.scrollHeight, 200) + 'px';
   });
 
-  // Send message on Enter (Shift+Enter for new line)
+  // Отправка по Enter
   messageInput.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -63,7 +57,6 @@ const messageInput = document.getElementById('messageInput');
     }
   });
 
-  // Send button click
   sendButton.addEventListener('click', sendMessage);
 
   function sendMessage() {
@@ -74,7 +67,7 @@ const messageInput = document.getElementById('messageInput');
 
     vscode.postMessage({
       type: 'userMessage',
-      content: text
+      content: text,
     });
 
     messageInput.value = '';
@@ -83,60 +76,81 @@ const messageInput = document.getElementById('messageInput');
     addLoadingIndicator();
   }
 
-  function addMessage(role, content) {
+  function clearHistory() {
+    // Сброс состояния + приветствие
+    const welcomeMessage = {
+      role: 'assistant',
+      content:
+        'Привет! Я Devil — твой интеллектуальный ассистент для разработки. ' +
+        'Я могу помочь с генерацией кода, объяснением, рефакторингом и анализом проекта.',
+    };
+
+    vscode.setState({ messages: [welcomeMessage] }); // Сохраняем приветствие
+    messagesArea.innerHTML = '';
+    addMessage('assistant', welcomeMessage.content, false); // false — не сохранять в цикле
+  }
+
+  function addMessage(role, content, save) {
+    if (save === undefined) save = true;
+
     const messageDiv = document.createElement('div');
     messageDiv.className = 'message ' + role + '-message';
 
     const avatar = role === 'user' ? '👤' : '🤖';
-    
-    // Рендерим Markdown для ответов агента
+
     let renderedContent = content;
-    if (role === 'assistant' && typeof marked !== 'undefined') {
+    if (role === 'assistant' && markedAvailable) {
       renderedContent = marked.parse(content);
-    } else {
+    } else if (role === 'user') {
       renderedContent = escapeHtml(content);
     }
-    
-    messageDiv.innerHTML = 
-      '<div class="message-avatar">' + avatar + '</div>' +
+
+    messageDiv.innerHTML =
+      '<div class="message-avatar">' +
+      avatar +
+      '</div>' +
       '<div class="message-content">' +
-        '<div class="message-text">' + renderedContent + '</div>' +
+      '<div class="message-text">' +
+      renderedContent +
+      '</div>' +
       '</div>';
 
     messagesArea.appendChild(messageDiv);
     messagesArea.scrollTop = messagesArea.scrollHeight;
 
-    // Добавляем кнопки копирования для блоков кода
     if (role === 'assistant') {
-      addCopyButtons(messageDiv);
+      addCopyButtons(messageDiv); // Добавляет кнопки только для новых блоков <code>
     }
-    // Сохраняем сообщение в state
-    const currentState = vscode.getState() || { messages: [] };
-    currentState.messages.push({ role, content });
-    vscode.setState(currentState);
+
+    if (save) {
+      const currentState = vscode.getState() || { messages: [] };
+      currentState.messages.push({ role: role, content: content });
+      vscode.setState(currentState);
+    }
   }
 
   function addCopyButtons(messageDiv) {
     const codeBlocks = messageDiv.querySelectorAll('pre code');
-    codeBlocks.forEach(function(codeBlock) {
+    codeBlocks.forEach(function (codeBlock) {
       const pre = codeBlock.parentElement;
-      if (pre && !pre.querySelector('.copy-button')) {
+      if (pre && !pre.querySelector('.copy-button-wrapper')) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'copy-button-wrapper';
+
         const button = document.createElement('button');
         button.className = 'copy-button';
         button.textContent = '📋 Копировать';
-        button.onclick = function() {
-          navigator.clipboard.writeText(codeBlock.textContent).then(function() {
+        button.onclick = function () {
+          navigator.clipboard.writeText(codeBlock.textContent).then(function () {
             button.textContent = '✓ Скопировано';
-            setTimeout(function() {
+            setTimeout(function () {
               button.textContent = '📋 Копировать';
             }, 2000);
           });
         };
-        
-        const wrapper = document.createElement('div');
-        wrapper.className = 'code-block-wrapper';
-        pre.parentNode.insertBefore(wrapper, pre);
+
         wrapper.appendChild(button);
+        pre.parentNode.insertBefore(wrapper, pre);
         wrapper.appendChild(pre);
       }
     });
@@ -146,10 +160,10 @@ const messageInput = document.getElementById('messageInput');
     const loadingDiv = document.createElement('div');
     loadingDiv.className = 'message assistant-message loading';
     loadingDiv.id = 'loading-indicator';
-    loadingDiv.innerHTML = 
+    loadingDiv.innerHTML =
       '<div class="message-avatar">🤖</div>' +
       '<div class="message-content">' +
-        '<div class="message-text">Думаю...</div>' +
+      '<div class="message-text">Думаю...</div>' +
       '</div>';
 
     messagesArea.appendChild(loadingDiv);
@@ -169,10 +183,9 @@ const messageInput = document.getElementById('messageInput');
     return div.innerHTML;
   }
 
-  // Обработка сообщений от Extension
   window.addEventListener('message', function (event) {
     const message = event.data;
-    
+
     switch (message.type) {
       case 'agentResponse':
         removeLoadingIndicator();
@@ -180,19 +193,20 @@ const messageInput = document.getElementById('messageInput');
         break;
       case 'error':
         removeLoadingIndicator();
-        addMessage('assistant', 'Ошибка: ' + message.text);
+        addMessage('assistant', 'Ошибка: ' + (message.text || 'Неизвестная ошибка'));
+        break;
+      case 'history':
+        if (message.messages && Array.isArray(message.messages)) {
+          messagesArea.innerHTML = '';
+          message.messages.forEach(function (msg) {
+            addMessage(msg.role, msg.content, false);
+          });
+        }
+        break;
+      case 'executeCommand':
+        messageInput.value = message.content;
+        sendMessage();
         break;
     }
   });
-
-  
-
-
-  function clearHistory() {
-    vscode.setState({ messages: [] });
-    messagesArea.innerHTML = '';
-    // Добавляем приветственное сообщение
-    addMessage('assistant', 'Привет! Я Devil — твой интеллектуальный ассистент для разработки. Я могу помочь с генерацией кода, объяснением, рефакторингом и анализом проекта.', false);
-  }
-
 })();
