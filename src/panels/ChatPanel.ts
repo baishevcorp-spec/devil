@@ -350,7 +350,7 @@ export class ChatPanel {
       '                </button>' +
       '            </div>' +
       '            <div class="input-hints">' +
-      '                <span class="hint">💡 Команды: /help, /scan, /diff, /whereis, /roadmap generate, /checklist generate, /explain</span>' +
+      '                <span class="hint">💡 Команды: /help, /scan, /diff, /whereis, /roadmap generate, /checklist generate, /explain, /view, /diff</span>' +
       '            </div>' +
       '        </div>' +
       '    </div>' +
