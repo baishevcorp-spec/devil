@@ -132,7 +132,7 @@ export function activate(context: vscode.ExtensionContext): void {
           relativePath = filePath.replace(project.path, '').replace(/^[/\\]/, '');
         }
 
-        const command = '/explain ' + relativePath + '\n\n```\n' + selectedText + '\n```';
+        const command = '/explain ' + relativePath + ' --- ' + selectedText.replace(/\n/g, ' ');
 
         // Отправляем команду в панель через postMessage
         setTimeout(() => {
