@@ -4,6 +4,7 @@ import { FileSystemService } from './services/FileSystemService';
 import { ProjectManager } from './services/ProjectManager';
 import { LLMProvider } from './services/LLMProvider';
 import { ContextBuilder } from './services/ContextBuilder';
+import { MemoryStore } from './services/MemoryStore';
 import { ChatPanel } from './panels/ChatPanel';
 import { logger } from './utils/logger';
 
@@ -12,6 +13,7 @@ let fileSystemService: FileSystemService;
 let projectManager: ProjectManager;
 let llmProvider: LLMProvider;
 let contextBuilder: ContextBuilder;
+let memoryStore: MemoryStore;
 
 export function activate(context: vscode.ExtensionContext): void {
   logger.info('Devil extension is activating...', 'Extension');
@@ -24,19 +26,14 @@ export function activate(context: vscode.ExtensionContext): void {
     projectManager = new ProjectManager(fileSystemService);
     llmProvider = new LLMProvider(configManager);
     contextBuilder = new ContextBuilder(projectManager, fileSystemService, null);
+    memoryStore = new MemoryStore();
 
     const helloCommand = vscode.commands.registerCommand('devil.hello', () => {
       vscode.window.showInformationMessage('Devil: расширение работает!');
     });
 
     const openChatCommand = vscode.commands.registerCommand('devil.openChat', () => {
-      ChatPanel.createOrShow(
-        context.extensionUri,
-        llmProvider,
-        contextBuilder,
-        projectManager,
-        fileSystemService
-      );
+      ChatPanel.createOrShow(context.extensionUri, llmProvider, contextBuilder, projectManager, fileSystemService, memoryStore);
     });
 
     const openProjectCommand = vscode.commands.registerCommand('devil.openProject', async () => {
@@ -44,13 +41,13 @@ export function activate(context: vscode.ExtensionContext): void {
         canSelectFiles: false,
         canSelectFolders: true,
         canSelectMany: false,
-        openLabel: 'Открыть проект',
+        openLabel: 'Открыть проект'
       });
 
       if (result && result.length > 0) {
         const folderUri = result[0];
         const folder = vscode.workspace.getWorkspaceFolder(folderUri);
-
+        
         if (folder) {
           await projectManager.setProject(folder);
           const project = projectManager.getCurrentProject();
@@ -66,83 +63,66 @@ export function activate(context: vscode.ExtensionContext): void {
     const testLLMCommand = vscode.commands.registerCommand('devil.testLLM', async () => {
       try {
         vscode.window.showInformationMessage('Devil: Тестирование LLM...');
-
-        const context = await contextBuilder.buildContext(
-          'Привет! Скажи "Привет, мир!" одним предложением.',
-          {
-            includeProjectStructure: true,
-            includeRoadmap: true,
-            includeChecklist: true,
-          }
-        );
-
-        logger.info(
-          'Контекст построен (длина: ' + context.systemPrompt.length + ' символов)',
-          'Extension'
-        );
-
-        const response = await llmProvider.generate(
-          'Привет! Скажи "Привет, мир!" одним предложением.',
-          {
-            systemPrompt: context.systemPrompt,
-          }
-        );
-
-        vscode.window.showInformationMessage(
-          'Devil LLM ответ: ' + response.content.substring(0, 100) + '...'
-        );
+        
+        const context = await contextBuilder.buildContext('Привет! Скажи "Привет, мир!" одним предложением.', {
+          includeProjectStructure: true,
+          includeRoadmap: true,
+          includeChecklist: true
+        });
+        
+        logger.info('Контекст построен (длина: ' + context.systemPrompt.length + ' символов)', 'Extension');
+        
+        const response = await llmProvider.generate('Привет! Скажи "Привет, мир!" одним предложением.', {
+          systemPrompt: context.systemPrompt
+        });
+        
+        vscode.window.showInformationMessage('Devil LLM ответ: ' + response.content.substring(0, 100) + '...');
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         vscode.window.showErrorMessage('Devil LLM ошибка: ' + message);
       }
     });
 
-    // UI-07: команда для объяснения выделенного кода
-    const explainSelectionCommand = vscode.commands.registerCommand(
-      'devil.explainSelection',
-      async () => {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor) {
-          vscode.window.showErrorMessage('Devil: Нет активного редактора');
-          return;
-        }
-
-        const selection = editor.selection;
-        const selectedText = editor.document.getText(selection);
-
-        if (!selectedText) {
-          vscode.window.showErrorMessage('Devil: Выделите код для объяснения');
-          return;
-        }
-
-        // Открываем чат
-        const panel = ChatPanel.createOrShow(
-          context.extensionUri,
-          llmProvider,
-          contextBuilder,
-          projectManager,
-          fileSystemService
-        );
-
-        // Формируем команду /explain с выделенным кодом
-        const filePath = editor.document.fileName;
-        const project = projectManager.getCurrentProject();
-        let relativePath = filePath;
-        if (project) {
-          relativePath = filePath.replace(project.path, '').replace(/^[/\\]/, '');
-        }
-
-        const command = '/explain ' + relativePath + ' --- ' + selectedText.replace(/\n/g, ' ');
-
-        // Отправляем команду в панель через postMessage
-        setTimeout(() => {
-          panel.sendMessage({
-            type: 'executeCommand',
-            content: command,
-          });
-        }, 300);
+    const explainSelectionCommand = vscode.commands.registerCommand('devil.explainSelection', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        vscode.window.showErrorMessage('Devil: Нет активного редактора');
+        return;
       }
-    );
+
+      const selection = editor.selection;
+      const selectedText = editor.document.getText(selection);
+
+      if (!selectedText) {
+        vscode.window.showErrorMessage('Devil: Выделите код для объяснения');
+        return;
+      }
+
+      const panel = ChatPanel.createOrShow(
+        context.extensionUri,
+        llmProvider,
+        contextBuilder,
+        projectManager,
+        fileSystemService,
+        memoryStore
+      );
+
+      const filePath = editor.document.fileName;
+      const project = projectManager.getCurrentProject();
+      let relativePath = filePath;
+      if (project) {
+        relativePath = filePath.replace(project.path, '').replace(/^[/\\]/, '');
+      }
+
+      const command = '/explain ' + relativePath + ' --- ' + selectedText.replace(/\n/g, ' ');
+
+      setTimeout(() => {
+        panel.sendMessage({
+          type: 'executeCommand',
+          content: command
+        });
+      }, 300);
+    });
 
     context.subscriptions.push(
       helloCommand,
@@ -167,9 +147,7 @@ export function activate(context: vscode.ExtensionContext): void {
     logger.info('Devil extension activated successfully!', 'Extension');
   } catch (error) {
     logger.error('Ошибка при активации расширения', error, 'Extension');
-    vscode.window.showErrorMessage(
-      'Devil: Ошибка при активации расширения. Проверьте Output Channel.'
-    );
+    vscode.window.showErrorMessage('Devil: Ошибка при активации расширения. Проверьте Output Channel.');
   }
 }
 

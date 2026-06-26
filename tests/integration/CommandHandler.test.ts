@@ -3,6 +3,7 @@ import { FileSystemService } from '../../src/services/FileSystemService';
 import { LLMProvider } from '../../src/services/LLMProvider';
 import { ContextBuilder } from '../../src/services/ContextBuilder';
 import { ProjectManager } from '../../src/services/ProjectManager';
+import { MemoryStore } from '../../src/services/MemoryStore';
 import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -12,24 +13,28 @@ describe('CommandHandler Integration Tests', () => {
   let commandHandler: CommandHandler;
   let fsService: FileSystemService;
   let projectManager: ProjectManager;
+  let memoryStore: MemoryStore;
   let testDir: string;
 
   const mockLLMProvider = {
-    generate: jest.fn(),
+    generate: jest.fn()
   } as unknown as LLMProvider;
 
   const mockContextBuilder = {
     buildContext: jest.fn().mockResolvedValue({
       systemPrompt: 'Test context',
-      metadata: {},
-    }),
+      metadata: {}
+    })
   } as unknown as ContextBuilder;
 
   beforeEach(async () => {
     fsService = new FileSystemService();
     projectManager = new ProjectManager(fsService);
+    memoryStore = new MemoryStore();
 
     testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'devil-cmd-test-'));
+
+    await memoryStore.initialize(testDir);
 
     await fs.mkdir(path.join(testDir, 'src'));
     await fs.writeFile(
@@ -37,12 +42,16 @@ describe('CommandHandler Integration Tests', () => {
       'export function hello() { return "world"; }',
       'utf-8'
     );
-    await fs.writeFile(path.join(testDir, 'package.json'), '{"name": "test-project"}', 'utf-8');
+    await fs.writeFile(
+      path.join(testDir, 'package.json'),
+      '{"name": "test-project"}',
+      'utf-8'
+    );
 
     const mockFolder = {
       uri: { fsPath: testDir },
       name: 'test-project',
-      index: 0,
+      index: 0
     } as vscode.WorkspaceFolder;
 
     await projectManager.setProject(mockFolder);
@@ -51,11 +60,13 @@ describe('CommandHandler Integration Tests', () => {
       fsService,
       mockLLMProvider,
       mockContextBuilder,
-      projectManager
+      projectManager,
+      memoryStore
     );
   });
 
   afterEach(async () => {
+    await memoryStore.close();
     projectManager.dispose();
     await fs.rm(testDir, { recursive: true, force: true });
     jest.clearAllMocks();
@@ -71,7 +82,7 @@ describe('CommandHandler Integration Tests', () => {
       expect(result!.message).toContain('/scan');
       expect(result!.message).toContain('/explain');
       expect(result!.message).toContain('/roadmap');
-      expect(result!.message).toContain('/view');
+      expect(result!.message).toContain('/whereis');
     });
   });
 
@@ -107,7 +118,7 @@ describe('CommandHandler Integration Tests', () => {
       (mockLLMProvider.generate as jest.Mock).mockResolvedValue({
         content: 'Это тестовое объяснение кода',
         tokensUsed: 100,
-        model: 'test-model',
+        model: 'test-model'
       });
     });
 
@@ -123,7 +134,9 @@ describe('CommandHandler Integration Tests', () => {
 
     it('объясняет выделенный код с разделителем ---', async () => {
       const selectedCode = 'function hello()';
-      const result = await commandHandler.handleMessage('/explain src/test.ts --- ' + selectedCode);
+      const result = await commandHandler.handleMessage(
+        '/explain src/test.ts --- ' + selectedCode
+      );
 
       expect(result).not.toBeNull();
       expect(result!.success).toBe(true);
@@ -147,7 +160,7 @@ describe('CommandHandler Integration Tests', () => {
       (mockLLMProvider.generate as jest.Mock).mockResolvedValue({
         content: '# Roadmap\n\n## Этап 1\n- Задача 1\n- Задача 2',
         tokensUsed: 500,
-        model: 'test-model',
+        model: 'test-model'
       });
     });
 
@@ -182,7 +195,7 @@ describe('CommandHandler Integration Tests', () => {
       (mockLLMProvider.generate as jest.Mock).mockResolvedValue({
         content: '# Чек-лист\n\n- [ ] `src/test.ts` — тестовый файл',
         tokensUsed: 300,
-        model: 'test-model',
+        model: 'test-model'
       });
     });
 
@@ -257,13 +270,51 @@ describe('CommandHandler Integration Tests', () => {
 
     it('поддерживает произвольный путь к файлу', async () => {
       await fs.mkdir(path.join(testDir, '.devil'), { recursive: true });
-      await fs.writeFile(path.join(testDir, '.devil', 'custom.md'), '# Custom\n\nContent', 'utf-8');
+      await fs.writeFile(
+        path.join(testDir, '.devil', 'custom.md'),
+        '# Custom\n\nContent',
+        'utf-8'
+      );
 
       const result = await commandHandler.handleMessage('/view custom.md');
 
       expect(result).not.toBeNull();
       expect(result!.success).toBe(true);
       expect(result!.message).toContain('Custom');
+    });
+  });
+
+  describe('/whereis command', () => {
+    it('возвращает подсказку без аргументов', async () => {
+      const result = await commandHandler.handleMessage('/whereis');
+
+      expect(result).not.toBeNull();
+      expect(result!.success).toBe(false);
+      expect(result!.message).toContain('/whereis <имя_символа>');
+    });
+
+    it('возвращает ошибку, если символ не найден', async () => {
+      const result = await commandHandler.handleMessage('/whereis NonExistent');
+
+      expect(result).not.toBeNull();
+      expect(result!.success).toBe(false);
+      expect(result!.message).toContain('не найден в графе');
+    });
+
+    it('находит символы, если они есть в графе', async () => {
+      await memoryStore.addNode({
+        type: 'function',
+        name: 'activate',
+        path: 'src/extension.ts',
+        signature: 'export function activate(context: vscode.ExtensionContext)'
+      });
+
+      const result = await commandHandler.handleMessage('/whereis activate');
+
+      expect(result).not.toBeNull();
+      expect(result!.success).toBe(true);
+      expect(result!.message).toContain('Найдено символов');
+      expect(result!.message).toContain('activate');
     });
   });
 

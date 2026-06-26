@@ -4,6 +4,7 @@ import { LLMProvider } from '../services/LLMProvider';
 import { ContextBuilder } from '../services/ContextBuilder';
 import { ProjectManager } from '../services/ProjectManager';
 import { FileSystemService } from '../services/FileSystemService';
+import { MemoryStore } from '../services/MemoryStore';
 import { CommandHandler } from '../commands/CommandHandler';
 import { HistoryManager } from '../services/HistoryManager';
 
@@ -33,6 +34,7 @@ export class ChatPanel {
   private readonly contextBuilder: ContextBuilder;
   private readonly projectManager: ProjectManager;
   private readonly fileSystemService: FileSystemService;
+  private readonly memoryStore: MemoryStore;
   private readonly commandHandler: CommandHandler;
   private readonly historyManager: HistoryManager;
 
@@ -41,7 +43,8 @@ export class ChatPanel {
     llmProvider: LLMProvider,
     contextBuilder: ContextBuilder,
     projectManager: ProjectManager,
-    fileSystemService: FileSystemService
+    fileSystemService: FileSystemService,
+    memoryStore: MemoryStore
   ): ChatPanel {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
@@ -61,8 +64,8 @@ export class ChatPanel {
         retainContextWhenHidden: true,
         localResourceRoots: [
           vscode.Uri.joinPath(extensionUri, 'webview'),
-          vscode.Uri.joinPath(extensionUri, 'node_modules'),
-        ],
+          vscode.Uri.joinPath(extensionUri, 'node_modules')
+        ]
       }
     );
 
@@ -72,7 +75,8 @@ export class ChatPanel {
       llmProvider,
       contextBuilder,
       projectManager,
-      fileSystemService
+      fileSystemService,
+      memoryStore
     );
     return ChatPanel.currentPanel;
   }
@@ -83,7 +87,8 @@ export class ChatPanel {
     llmProvider: LLMProvider,
     contextBuilder: ContextBuilder,
     projectManager: ProjectManager,
-    fileSystemService: FileSystemService
+    fileSystemService: FileSystemService,
+    memoryStore: MemoryStore
   ) {
     this._panel = panel;
     this._extensionUri = extensionUri;
@@ -91,11 +96,13 @@ export class ChatPanel {
     this.contextBuilder = contextBuilder;
     this.projectManager = projectManager;
     this.fileSystemService = fileSystemService;
+    this.memoryStore = memoryStore;
     this.commandHandler = new CommandHandler(
       fileSystemService,
       llmProvider,
       contextBuilder,
-      projectManager
+      projectManager,
+      memoryStore
     );
     this.historyManager = new HistoryManager();
 
@@ -124,7 +131,7 @@ export class ChatPanel {
         if (messages.length > 0) {
           this.sendMessage({
             type: 'history',
-            messages: messages.map((m) => ({ role: m.role, content: m.content })),
+            messages: messages.map(m => ({ role: m.role, content: m.content }))
           });
         }
       } catch (error) {
@@ -144,11 +151,11 @@ export class ChatPanel {
         const commandResult = await this.commandHandler.handleMessage(content);
         if (commandResult) {
           await this.historyManager.addMessage('assistant', commandResult.message, {
-            command: commandResult.success ? 'success' : 'error',
+            command: commandResult.success ? 'success' : 'error'
           });
           this.sendMessage({
             type: 'agentResponse',
-            content: commandResult.message,
+            content: commandResult.message
           });
           return;
         }
@@ -183,7 +190,7 @@ export class ChatPanel {
         includeProjectStructure: true,
         includeRoadmap: true,
         includeChecklist: true,
-        includeMemoryGraph: false,
+        includeMemoryGraph: false
       });
 
       logger.info(
@@ -192,19 +199,19 @@ export class ChatPanel {
       );
 
       const response = await this.llmProvider.generate(content, {
-        systemPrompt: context.systemPrompt,
+        systemPrompt: context.systemPrompt
       });
 
       logger.info('Получен ответ от LLM (токенов: ' + response.tokensUsed + ')', 'ChatPanel');
 
       await this.historyManager.addMessage('assistant', response.content, {
         tokensUsed: response.tokensUsed,
-        model: response.model,
+        model: response.model
       });
 
       this.sendMessage({
         type: 'agentResponse',
-        content: response.content,
+        content: response.content
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -214,7 +221,7 @@ export class ChatPanel {
 
       this.sendMessage({
         type: 'error',
-        text: errorMessage,
+        text: errorMessage
       });
     }
   }
@@ -257,73 +264,25 @@ export class ChatPanel {
       vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'core.js')
     );
     const highlightLangTypescript = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this._extensionUri,
-        'node_modules',
-        'highlight.js',
-        'lib',
-        'languages',
-        'typescript.js'
-      )
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'typescript.js')
     );
     const highlightLangJavascript = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this._extensionUri,
-        'node_modules',
-        'highlight.js',
-        'lib',
-        'languages',
-        'javascript.js'
-      )
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'javascript.js')
     );
     const highlightLangPython = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this._extensionUri,
-        'node_modules',
-        'highlight.js',
-        'lib',
-        'languages',
-        'python.js'
-      )
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'python.js')
     );
     const highlightLangJson = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this._extensionUri,
-        'node_modules',
-        'highlight.js',
-        'lib',
-        'languages',
-        'json.js'
-      )
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'json.js')
     );
     const highlightLangBash = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this._extensionUri,
-        'node_modules',
-        'highlight.js',
-        'lib',
-        'languages',
-        'bash.js'
-      )
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'bash.js')
     );
     const highlightLangSql = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this._extensionUri,
-        'node_modules',
-        'highlight.js',
-        'lib',
-        'languages',
-        'sql.js'
-      )
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'lib', 'languages', 'sql.js')
     );
     const highlightStylesUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this._extensionUri,
-        'node_modules',
-        'highlight.js',
-        'styles',
-        'github-dark.css'
-      )
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'highlight.js', 'styles', 'github-dark.css')
     );
 
     const nonce = getNonce();
@@ -334,25 +293,18 @@ export class ChatPanel {
       "script-src 'nonce-" + nonce + "'",
       'font-src ' + webview.cspSource,
       'img-src ' + webview.cspSource + ' https:',
-      'connect-src https:',
+      'connect-src https:'
     ].join('; ');
 
-    return (
-      '<!DOCTYPE html>' +
+    return '<!DOCTYPE html>' +
       '<html lang="ru">' +
       '<head>' +
       '    <meta charset="UTF-8">' +
       '    <meta name="viewport" content="width=device-width, initial-scale=1.0">' +
-      '    <meta http-equiv="Content-Security-Policy" content="' +
-      csp +
-      '">' +
+      '    <meta http-equiv="Content-Security-Policy" content="' + csp + '">' +
       '    <title>Devil Chat</title>' +
-      '    <link rel="stylesheet" href="' +
-      styleUri +
-      '">' +
-      '    <link rel="stylesheet" href="' +
-      highlightStylesUri +
-      '">' +
+      '    <link rel="stylesheet" href="' + styleUri + '">' +
+      '    <link rel="stylesheet" href="' + highlightStylesUri + '">' +
       '</head>' +
       '<body>' +
       '    <div class="chat-container">' +
@@ -363,8 +315,8 @@ export class ChatPanel {
       '                <span class="project-path">Загрузка...</span>' +
       '            </div>' +
       '            <div class="header-actions">' +
-      '                <button class="icon-button" title="Очистить историю">️</button>' +
-      '                <button class="icon-button" title="Настройки">️</button>' +
+      '                <button class="icon-button" title="Очистить историю">🗑️</button>' +
+      '                <button class="icon-button" title="Настройки">⚙️</button>' +
       '            </div>' +
       '        </div>' +
       '        <div class="messages-area" id="messagesArea">' +
@@ -391,58 +343,21 @@ export class ChatPanel {
       '                </button>' +
       '            </div>' +
       '            <div class="input-hints">' +
-      '                <span class="hint">💡 Команды: /help, /scan, /roadmap generate, /checklist generate, /explain, /view</span>' +
+      '                <span class="hint">💡 Команды: /help, /scan, /roadmap generate, /checklist generate, /explain, /whereis</span>' +
       '            </div>' +
       '        </div>' +
       '    </div>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      markedUri +
-      '"></script>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      highlightUri +
-      '"></script>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      highlightLangTypescript +
-      '"></script>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      highlightLangJavascript +
-      '"></script>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      highlightLangPython +
-      '"></script>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      highlightLangJson +
-      '"></script>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      highlightLangBash +
-      '"></script>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      highlightLangSql +
-      '"></script>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      scriptUri +
-      '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + markedUri + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightUri + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangTypescript + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangJavascript + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangPython + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangJson + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangBash + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangSql + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + scriptUri + '"></script>' +
       '</body>' +
-      '</html>'
-    );
+      '</html>';
   }
 }
 
