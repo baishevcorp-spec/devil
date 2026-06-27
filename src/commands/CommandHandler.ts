@@ -353,8 +353,8 @@ export class CommandHandler {
         }
         byType[node.type].push({
           name: node.name,
-          path: node.path,
-          signature: node.signature,
+          path: node.path || '',
+          signature: node.metadata?.signature as string | undefined,
         });
       }
 

@@ -302,7 +302,7 @@ describe('CommandHandler Integration Tests', () => {
         type: 'function',
         name: 'activate',
         path: 'src/extension.ts',
-        signature: 'export function activate(context: vscode.ExtensionContext)',
+        metadata: { signature: 'export function activate(context: vscode.ExtensionContext)' }, tags: [],
       });
 
       const result = await commandHandler.handleMessage('/whereis activate');
