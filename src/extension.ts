@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { ConfigManager } from './services/ConfigManager';
 import { FileSystemService } from './services/FileSystemService';
 import { ProjectManager } from './services/ProjectManager';
@@ -155,8 +156,9 @@ export function activate(context: vscode.ExtensionContext): void {
         const filePath = editor.document.fileName;
         const project = projectManager.getCurrentProject();
         let relativePath = filePath;
-        if (project) {
-          relativePath = filePath.replace(project.path, '').replace(/^[/\\]/, '');
+      if (project) {
+        relativePath = path.relative(project.path, filePath);
+        relativePath = relativePath.split(path.sep).join('/');.replace(/^[/\\]/, '');
         }
 
         const command = '/explain ' + relativePath + ' --- ' + selectedText.replace(/\n/g, ' ');
