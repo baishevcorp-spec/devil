@@ -119,6 +119,7 @@ export class MemoryStore implements IMemoryStore {
         preferred_libraries TEXT DEFAULT '[]',
         preferred_patterns TEXT DEFAULT '[]',
         custom_instructions TEXT DEFAULT '[]',
+        interaction_history TEXT DEFAULT '[]',
         updated_at INTEGER NOT NULL
       )
     `);
@@ -175,8 +176,8 @@ export class MemoryStore implements IMemoryStore {
     const profileExists = this.db.exec('SELECT id FROM user_profile WHERE id = 1');
     if (profileExists.length === 0 || profileExists[0].values.length === 0) {
       this.db.run(
-        'INSERT INTO user_profile (id, coding_style, preferred_libraries, preferred_patterns, custom_instructions, updated_at) VALUES (1, ?, ?, ?, ?, ?)',
-        ['{}', '[]', '[]', '[]', Date.now()]
+        'INSERT INTO user_profile (id, coding_style, preferred_libraries, preferred_patterns, custom_instructions, interaction_history, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?)',
+        ['{}', '[]', '[]', '[]', '[]', Date.now()]
       );
     }
 
@@ -807,6 +808,7 @@ export class MemoryStore implements IMemoryStore {
       preferred_libraries: this.parseJson<string[]>(getValue('preferred_libraries') as string),
       preferred_patterns: this.parseJson<string[]>(getValue('preferred_patterns') as string),
       custom_instructions: this.parseJson<string[]>(getValue('custom_instructions') as string),
+      interaction_history: this.parseJson<{ timestamp: number; action: string; details: string }[]>(getValue('interaction_history') as string),
       updated_at: getValue('updated_at') as number,
     };
   }

@@ -62,6 +62,7 @@ export interface UserProfile {
   preferred_libraries: string[];
   preferred_patterns: string[];
   custom_instructions: string[];
+  interaction_history: { timestamp: number; action: string; details: string }[];
   updated_at: number;
 }
 

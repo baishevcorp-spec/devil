@@ -1,146 +1,72 @@
-import * as fs from 'fs';
-import { Database } from 'sql.js';
-import {
-  IUserProfileManager,
-  UserProfile,
-  InteractionRecord,
-} from '../interfaces/IUserProfileManager';
+import { IMemoryStore, UserProfile as DbUserProfile } from '../interfaces/IMemoryStore';
+import { IUserProfileManager, UserProfile } from '../interfaces/IUserProfileManager';
 import { logger } from '../utils/logger';
 
-const DEFAULT_PROFILE: UserProfile = {
-  codingStyle: {
-    indentStyle: 'spaces',
-    indentSize: 2,
-    quoteStyle: 'single',
-    semicolons: true,
-  },
-  preferredLibraries: [],
-  preferredPatterns: [],
-  customInstructions: [],
-  interactionHistory: [],
-};
-
+/**
+ * UserProfileManager — управление профилем пользователя через MemoryStore.
+ *
+ * Отвечает за:
+ * - Хранение глобального профиля пользователя (singleton)
+ * - Запись предпочтений (стиль кода, библиотеки, паттерны)
+ * - Чтение профиля для контекста LLM
+ *
+ * Все данные хранятся в .devil/memory.db (таблица user_profile, id=1).
+ */
 export class UserProfileManager implements IUserProfileManager {
-  private db: Database | null = null;
-  private dbPath: string = '';
-
-  async initialize(dbPath: string): Promise<void> {
-    this.dbPath = dbPath;
-
-    const initSqlJs = (await import('sql.js')).default;
-    const SQL = await initSqlJs();
-
-    if (fs.existsSync(dbPath)) {
-      const buffer = fs.readFileSync(dbPath);
-      this.db = new SQL.Database(buffer);
-    } else {
-      this.db = new SQL.Database();
-    }
-
-    this.createTables();
-    this.save();
-
-    logger.info('UserProfileManager инициализирован', 'UserProfileManager');
+  constructor(private readonly memoryStore: IMemoryStore) {
+    logger.info('UserProfileManager инициализирован (через MemoryStore)', 'UserProfileManager');
   }
 
-  private createTables(): void {
-    if (!this.db) return;
-
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS user_profile (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        coding_style TEXT DEFAULT '{}',
-        preferred_libraries TEXT DEFAULT '[]',
-        preferred_patterns TEXT DEFAULT '[]',
-        custom_instructions TEXT DEFAULT '[]',
-        updated_at INTEGER NOT NULL
-      )
-    `);
-
-    // Проверяем, есть ли профиль, если нет — создаём
-    const result = this.db.exec('SELECT id FROM user_profile WHERE id = 1');
-    if (result.length === 0 || result[0].values.length === 0) {
-      this.db.run(
-        'INSERT INTO user_profile (id, coding_style, preferred_libraries, preferred_patterns, custom_instructions, updated_at) VALUES (1, ?, ?, ?, ?, ?)',
-        [
-          JSON.stringify(DEFAULT_PROFILE.codingStyle),
-          JSON.stringify(DEFAULT_PROFILE.preferredLibraries),
-          JSON.stringify(DEFAULT_PROFILE.preferredPatterns),
-          JSON.stringify(DEFAULT_PROFILE.customInstructions),
-          Date.now(),
-        ]
-      );
-    }
-  }
-
-  private save(): void {
-    if (!this.db) return;
-
-    try {
-      const data = this.db.export();
-      const buffer = Buffer.from(data);
-      fs.writeFileSync(this.dbPath, buffer);
-    } catch (error) {
-      logger.error('Не удалось сохранить профиль', error, 'UserProfileManager');
-    }
-  }
-
+  /**
+   * Получает профиль пользователя.
+   */
   async getProfile(): Promise<UserProfile> {
-    if (!this.db) throw new Error('UserProfileManager не инициализирован');
+    const dbProfile = await this.memoryStore.getUserProfile();
 
-    const result = this.db.exec('SELECT * FROM user_profile WHERE id = 1');
-
-    if (result.length === 0 || result[0].values.length === 0) {
-      return DEFAULT_PROFILE;
+    if (!dbProfile) {
+      logger.warn('Профиль не найден, возвращаю значения по умолчанию', 'UserProfileManager');
+      return this.getDefaultProfile();
     }
 
-    const columns = result[0].columns;
-    const row = result[0].values[0];
-
-    return {
-      codingStyle: JSON.parse(row[columns.indexOf('coding_style')] as string),
-      preferredLibraries: JSON.parse(row[columns.indexOf('preferred_libraries')] as string),
-      preferredPatterns: JSON.parse(row[columns.indexOf('preferred_patterns')] as string),
-      customInstructions: JSON.parse(row[columns.indexOf('custom_instructions')] as string),
-      interactionHistory: [], // История хранится отдельно
-    };
+    return this.mapDbProfileToUserProfile(dbProfile);
   }
 
+  /**
+   * Обновляет профиль пользователя.
+   */
   async updateProfile(updates: Partial<UserProfile>): Promise<void> {
-    if (!this.db) throw new Error('UserProfileManager не инициализирован');
-
-    const current = await this.getProfile();
-    const updated = { ...current, ...updates };
-
-    this.db.run(
-      'UPDATE user_profile SET coding_style = ?, preferred_libraries = ?, preferred_patterns = ?, custom_instructions = ?, updated_at = ? WHERE id = 1',
-      [
-        JSON.stringify(updated.codingStyle),
-        JSON.stringify(updated.preferredLibraries),
-        JSON.stringify(updated.preferredPatterns),
-        JSON.stringify(updated.customInstructions),
-        Date.now(),
-      ]
-    );
-
-    this.save();
-    logger.info('Профиль обновлён', 'UserProfileManager');
-  }
-
-  async addPreference(key: string, value: string): Promise<void> {
-    const profile = await this.getProfile();
-
-    if (key === 'library' && !profile.preferredLibraries.includes(value)) {
-      profile.preferredLibraries.push(value);
-    } else if (key === 'pattern' && !profile.preferredPatterns.includes(value)) {
-      profile.preferredPatterns.push(value);
-    } else if (key === 'instruction' && !profile.customInstructions.includes(value)) {
-      profile.customInstructions.push(value);
+    try {
+      await this.memoryStore.updateUserProfile(this.mapUpdates(updates));
+      logger.info('Профиль обновлён', 'UserProfileManager');
+    } catch (error) {
+      logger.error('Не удалось обновить профиль', error, 'UserProfileManager');
     }
-
-    await this.updateProfile(profile);
   }
 
+  /**
+   * Добавляет предпочтение.
+   */
+  async addPreference(key: string, value: string): Promise<void> {
+    try {
+      const profile = await this.getProfile();
+
+      if (key === 'library' && !profile.preferredLibraries.includes(value)) {
+        profile.preferredLibraries.push(value);
+      } else if (key === 'pattern' && !profile.preferredPatterns.includes(value)) {
+        profile.preferredPatterns.push(value);
+      } else if (key === 'instruction' && !profile.customInstructions.includes(value)) {
+        profile.customInstructions.push(value);
+      }
+
+      await this.updateProfile(profile);
+    } catch (error) {
+      logger.error('Не удалось добавить предпочтение', error, 'UserProfileManager');
+    }
+  }
+
+  /**
+   * Получает все предпочтения.
+   */
   async getPreferences(): Promise<Record<string, string[]>> {
     const profile = await this.getProfile();
 
@@ -151,32 +77,97 @@ export class UserProfileManager implements IUserProfileManager {
     };
   }
 
-  async addInteraction(record: InteractionRecord): Promise<void> {
-    // История взаимодействий хранится в памяти (можно расширить для хранения в БД)
+  /**
+   * Добавляет запись о взаимодействии.
+   */
+  async addInteraction(record: {
+    timestamp: number;
+    action: string;
+    details: string;
+  }): Promise<void> {
+    try {
+      const profile = await this.getProfile();
+      profile.interactionHistory.push(record);
+
+      // Ограничиваем историю последними 100 записями
+      if (profile.interactionHistory.length > 100) {
+        profile.interactionHistory = profile.interactionHistory.slice(-100);
+      }
+
+      await this.updateProfile(profile);
+      logger.info('Взаимодействие добавлено: ' + record.action, 'UserProfileManager');
+    } catch (error) {
+      logger.error('Не удалось добавить взаимодействие', error, 'UserProfileManager');
+    }
+  }
+
+  /**
+   * Получает последние взаимодействия.
+   */
+  async getRecentInteractions(
+    limit: number = 10
+  ): Promise<Array<{ timestamp: number; action: string; details: string }>> {
     const profile = await this.getProfile();
-    profile.interactionHistory.push(record);
-
-    // Ограничиваем историю последними 100 записями
-    if (profile.interactionHistory.length > 100) {
-      profile.interactionHistory = profile.interactionHistory.slice(-100);
-    }
-
-    // Сохраняем в отдельную таблицу или файл (упрощённо — в памяти)
-    logger.info('Взаимодействие добавлено: ' + record.action, 'UserProfileManager');
+    return profile.interactionHistory.slice(-limit);
   }
 
-  async getRecentInteractions(): Promise<InteractionRecord[]> {
-    // Упрощённая реализация — возвращаем пустой массив
-    // В полной версии можно хранить в отдельной таблице
-    return [];
+  /**
+   * Преобразует профиль из БД в формат IUserProfileManager.
+   */
+  private mapDbProfileToUserProfile(dbProfile: DbUserProfile): UserProfile {
+    const defaultCodingStyle = {
+      indentStyle: 'spaces',
+      indentSize: 2,
+      quoteStyle: 'single',
+      semicolons: true
+    };
+
+    return {
+      codingStyle: { ...defaultCodingStyle, ...(dbProfile.coding_style as any) },
+      preferredLibraries: dbProfile.preferred_libraries || [],
+      preferredPatterns: dbProfile.preferred_patterns || [],
+      customInstructions: dbProfile.custom_instructions || [],
+      interactionHistory: []
+    };
   }
 
-  async close(): Promise<void> {
-    if (this.db) {
-      this.save();
-      this.db.close();
-      this.db = null;
-      logger.info('UserProfileManager закрыт', 'UserProfileManager');
+  /**
+   * Преобразует обновления в формат для MemoryStore.
+   */
+  private mapUpdates(updates: Partial<UserProfile>): Partial<DbUserProfile> {
+    const result: Partial<DbUserProfile> = {};
+
+    if (updates.codingStyle !== undefined) {
+      result.coding_style = updates.codingStyle;
     }
+    if (updates.preferredLibraries !== undefined) {
+      result.preferred_libraries = updates.preferredLibraries;
+    }
+    if (updates.preferredPatterns !== undefined) {
+      result.preferred_patterns = updates.preferredPatterns;
+    }
+    if (updates.customInstructions !== undefined) {
+      result.custom_instructions = updates.customInstructions;
+    }
+
+    return result;
+  }
+
+  /**
+   * Возвращает профиль по умолчанию.
+   */
+  private getDefaultProfile(): UserProfile {
+    return {
+      codingStyle: {
+        indentStyle: 'spaces',
+        indentSize: 2,
+        quoteStyle: 'single',
+        semicolons: true,
+      },
+      preferredLibraries: [],
+      preferredPatterns: [],
+      customInstructions: [],
+      interactionHistory: [],
+    };
   }
 }

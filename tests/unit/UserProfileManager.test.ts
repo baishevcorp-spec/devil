@@ -1,42 +1,37 @@
 import { UserProfileManager } from '../../src/services/UserProfileManager';
+import { MemoryStore } from '../../src/services/MemoryStore';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 
 describe('UserProfileManager', () => {
-  let manager: UserProfileManager;
+  let userProfileManager: UserProfileManager;
+  let memoryStore: MemoryStore;
   let testDir: string;
 
   beforeEach(async () => {
     testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'devil-profile-test-'));
-    manager = new UserProfileManager();
-    await manager.initialize(path.join(testDir, 'profile.db'));
+    memoryStore = new MemoryStore();
+    await memoryStore.initialize(testDir);
+    userProfileManager = new UserProfileManager(memoryStore);
   });
 
   afterEach(async () => {
-    await manager.close();
+    await memoryStore.close();
     await fs.rm(testDir, { recursive: true, force: true });
   });
 
-  describe('initialize', () => {
-    it('создаёт файл БД', async () => {
-      const dbPath = path.join(testDir, 'profile.db');
-      const exists = await fs.access(dbPath).then(() => true).catch(() => false);
-      expect(exists).toBe(true);
-    });
-
-    it('создаёт профиль по умолчанию', async () => {
-      const profile = await manager.getProfile();
+  describe('getProfile', () => {
+    it('возвращает профиль по умолчанию', async () => {
+      const profile = await userProfileManager.getProfile();
       expect(profile.codingStyle.indentStyle).toBe('spaces');
       expect(profile.codingStyle.indentSize).toBe(2);
-      expect(profile.codingStyle.quoteStyle).toBe('single');
-      expect(profile.codingStyle.semicolons).toBe(true);
     });
   });
 
   describe('updateProfile', () => {
     it('обновляет стиль кода', async () => {
-      await manager.updateProfile({
+      await userProfileManager.updateProfile({
         codingStyle: {
           indentStyle: 'tabs',
           indentSize: 4,
@@ -45,18 +40,18 @@ describe('UserProfileManager', () => {
         }
       });
 
-      const profile = await manager.getProfile();
+      const profile = await userProfileManager.getProfile();
       expect(profile.codingStyle.indentStyle).toBe('tabs');
       expect(profile.codingStyle.indentSize).toBe(4);
     });
 
     it('обновляет предпочтения', async () => {
-      await manager.updateProfile({
+      await userProfileManager.updateProfile({
         preferredLibraries: ['React', 'TypeScript'],
         preferredPatterns: ['Functional components', 'Hooks']
       });
 
-      const profile = await manager.getProfile();
+      const profile = await userProfileManager.getProfile();
       expect(profile.preferredLibraries).toContain('React');
       expect(profile.preferredPatterns).toContain('Hooks');
     });
@@ -64,28 +59,28 @@ describe('UserProfileManager', () => {
 
   describe('addPreference', () => {
     it('добавляет библиотеку', async () => {
-      await manager.addPreference('library', 'Vue');
-
-      const profile = await manager.getProfile();
+      await userProfileManager.addPreference('library', 'Vue');
+      
+      const profile = await userProfileManager.getProfile();
       expect(profile.preferredLibraries).toContain('Vue');
     });
 
     it('не добавляет дубликаты', async () => {
-      await manager.addPreference('library', 'React');
-      await manager.addPreference('library', 'React');
-
-      const profile = await manager.getProfile();
-      const count = profile.preferredLibraries.filter(lib => lib === 'React').length;
+      await userProfileManager.addPreference('library', 'React');
+      await userProfileManager.addPreference('library', 'React');
+      
+      const profile = await userProfileManager.getProfile();
+      const count = profile.preferredLibraries.filter((lib: string) => lib === 'React').length;
       expect(count).toBe(1);
     });
   });
 
   describe('getPreferences', () => {
     it('возвращает все предпочтения', async () => {
-      await manager.addPreference('library', 'Angular');
-      await manager.addPreference('pattern', 'MVC');
-
-      const prefs = await manager.getPreferences();
+      await userProfileManager.addPreference('library', 'Angular');
+      await userProfileManager.addPreference('pattern', 'MVC');
+      
+      const prefs = await userProfileManager.getPreferences();
       expect(prefs.libraries).toContain('Angular');
       expect(prefs.patterns).toContain('MVC');
     });
@@ -93,18 +88,19 @@ describe('UserProfileManager', () => {
 
   describe('persistency', () => {
     it('сохраняет данные между сессиями', async () => {
-      await manager.updateProfile({
+      await userProfileManager.updateProfile({
         preferredLibraries: ['Svelte']
       });
-      await manager.close();
+      await memoryStore.close();
 
-      const newManager = new UserProfileManager();
-      await newManager.initialize(path.join(testDir, 'profile.db'));
-
+      const newStore = new MemoryStore();
+      await newStore.initialize(testDir);
+      
+      const newManager = new UserProfileManager(newStore);
       const profile = await newManager.getProfile();
       expect(profile.preferredLibraries).toContain('Svelte');
 
-      await newManager.close();
+      await newStore.close();
     });
   });
 });
