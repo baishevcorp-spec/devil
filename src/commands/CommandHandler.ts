@@ -61,6 +61,8 @@ export class CommandHandler {
         return await this.handleWhereis(args);
       case '/diff':
         return await this.handleDiff(args);
+      case '/git':
+        return await this.handleGit(args);
       case '/memory':
         return await this.handleMemory(args);
       case '/view':
@@ -461,6 +463,53 @@ export class CommandHandler {
     }
   }
 
+  private async handleGit(args: string[]): Promise<CommandResult> {
+    if (args.length === 0 || args[0] !== 'log') {
+      return {
+        success: false,
+        message:
+          'Использование: /git log [путь_к_файлу]\n\nПример: /git log package.json\n\nПоказывает историю коммитов для файла или проекта.',
+      };
+    }
+
+    const filePath = args.length > 1 ? args[1] : undefined;
+
+    try {
+      const commits = await this.gitService.getLog(filePath, 20);
+
+      if (commits.length === 0) {
+        return {
+          success: false,
+          message: filePath
+            ? 'История коммитов для файла "' + filePath + '" не найдена.'
+            : 'История коммитов пуста.',
+        };
+      }
+
+      const lines: string[] = [];
+      lines.push('## История коммитов' + (filePath ? ' для ' + filePath : ''));
+      lines.push('');
+
+      for (const commit of commits) {
+        lines.push('### ' + commit.hash.substring(0, 7) + ' — ' + commit.message);
+        lines.push('**Автор:** ' + commit.author + ' | **Дата:** ' + commit.date);
+        lines.push('');
+      }
+
+      return {
+        success: true,
+        message: lines.join('\n'),
+        data: { commits, filePath },
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: 'Ошибка получения истории коммитов: ' + errorMessage,
+      };
+    }
+  }
+
   private async handleMemory(args: string[]): Promise<CommandResult> {
     if (args.length === 0 || args[0] !== 'show') {
       return {
@@ -480,7 +529,6 @@ export class CommandHandler {
         };
       }
 
-      // Группируем узлы по типу
       const byType: Record<string, typeof nodes> = {};
       for (const node of nodes) {
         if (!byType[node.type]) {
@@ -588,7 +636,7 @@ export class CommandHandler {
 
       let header = '## Содержимое файла: .devil/' + filePath;
       if (fileName === 'roadmap') {
-        header = '## ️ Roadmap проекта';
+        header = '## 🗺️ Roadmap проекта';
       } else if (fileName === 'checklist') {
         header = '## ✅ Чек-лист файлов проекта';
       }
@@ -612,6 +660,7 @@ export class CommandHandler {
       '## Доступные команды',
       '',
       '**Файлы:**',
+      '- `/git log [файл]` — показать историю коммитов',
       '- `/diff [commit]` — показать изменения в коде',
       '- `/whereis <символ>` — найти символ в проекте',
       '- `/memory show` — показать графовую память',

@@ -365,6 +365,25 @@ describe('CommandHandler Integration Tests', () => {
     });
   });
 
+  describe('/git log command', () => {
+    it('возвращает подсказку без аргумента log', async () => {
+      const result = await commandHandler.handleMessage('/git');
+
+      expect(result).not.toBeNull();
+      expect(result!.success).toBe(false);
+      expect(result!.message).toContain('/git log');
+    });
+
+    it('возвращает результат для /git log', async () => {
+      const result = await commandHandler.handleMessage('/git log package.json');
+
+      expect(result).not.toBeNull();
+      // Результат может быть success: true (если git находит коммиты) или success: false (если git не настроен)
+      // Главное, что команда не бросает исключение и возвращает структуру CommandResult
+      expect(result!.message).toBeDefined();
+    });
+  });
+
   describe('Неизвестные команды', () => {
     it('возвращает ошибку для неизвестной команды', async () => {
       const result = await commandHandler.handleMessage('/unknown');

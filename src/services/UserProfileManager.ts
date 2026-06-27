@@ -123,7 +123,10 @@ export class UserProfileManager implements IUserProfileManager {
     };
 
     return {
-      codingStyle: { ...defaultCodingStyle, ...(dbProfile.coding_style as Record<string, unknown>) },
+      codingStyle: {
+        ...defaultCodingStyle,
+        ...(dbProfile.coding_style as Partial<UserProfile['codingStyle']>)
+      } as UserProfile['codingStyle'],
       preferredLibraries: dbProfile.preferred_libraries || [],
       preferredPatterns: dbProfile.preferred_patterns || [],
       customInstructions: dbProfile.custom_instructions || [],

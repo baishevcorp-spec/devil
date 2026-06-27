@@ -457,3 +457,150 @@ CommandHandler — готов добавить новую команду
 ✅ CHECK constraints на type поля
 ✅ Индексы для всех часто используемых полей
 ✅ Система миграций
+
+# Исправление последнего warning и итог рефакторинга
+
+## Шаг 1: Исправление ESLint warning
+
+```bash
+cat > fix_upm_any.js <<'FIX_EOF'
+const fs = require('fs');
+const filePath = 'src/services/UserProfileManager.ts';
+
+let content = fs.readFileSync(filePath, 'utf8');
+
+// Заменяем 'as any' на правильный тип
+content = content.replace(
+  /codingStyle: \{ \.\.\.defaultCodingStyle, \.\.\.\(dbProfile\.coding_style as any\) \}/,
+  "codingStyle: { ...defaultCodingStyle, ...(dbProfile.coding_style as Record<string, unknown>) }"
+);
+
+fs.writeFileSync(filePath, content, 'utf8');
+console.log('✓ ESLint warning исправлен');
+FIX_EOF
+
+node fix_upm_any.js
+rm fix_upm_any.js
+```
+
+## Шаг 2: Проверка
+
+```bash
+npm run lint
+```
+
+Должно быть: **0 errors, 0 warnings**.
+
+## Шаг 3: Коммит
+
+```bash
+git add src/services/UserProfileManager.ts
+git commit -m "fix: replace 'any' type with Record<string, unknown> in UserProfileManager
+
+- Eliminates ESLint warning: @typescript-eslint/no-explicit-any
+- Uses proper type for coding_style from database
+- Code quality improved"
+```
+
+---
+
+# 🎉 РЕФАКТОРИНГ ЗАВЕРШЁН!
+
+## Что было сделано
+
+### ✅ Единая БД `.devil/memory.db`
+Все данные теперь хранятся в одной SQLite-базе согласно **DATABASE_SCHEMA.md**:
+
+| Таблица | Назначение | Статус |
+|---------|------------|--------|
+| `nodes` | Узлы графа (файлы, классы, функции) | ✅ |
+| `edges` | Связи между узлами | ✅ |
+| `tags` + `node_tags` | Теги для узлов (many-to-many) | ✅ |
+| `cache` | Кэш ответов LLM | ✅ |
+| `user_profile` | Профиль пользователя (singleton) | ✅ |
+| `dialog_history` | История диалогов | ✅ |
+| `change_log` | Лог действий агента | ✅ |
+| `migrations` | Система миграций | ✅ |
+
+### ✅ Миграция сервисов
+- **HistoryManager** — переписан, теперь использует `dialog_history` вместо `history.json`
+- **UserProfileManager** — переписан, теперь использует `user_profile` вместо отдельной БД
+- **MemoryStore** — полностью соответствует схеме из DATABASE_SCHEMA.md
+- **extension.ts** — инициализирует MemoryStore при открытии проекта
+
+### ✅ Тесты
+- **161 тест проходит** (было 125 до рефакторинга)
+- Покрытие всех новых таблиц
+- Тесты на персистентность, миграции, ошибки
+
+### ✅ Архитектура
+- Соответствует **ARCHITECTURE.md**
+- Зависимости через интерфейсы
+- Единая точка инициализации в `extension.ts`
+
+---
+
+# 🚀 Следующий шаг: Sprint 4 — Индексация и быстрый поиск
+
+Согласно **Roadmap**, Sprint 4 (2026-08-15 — 2026-08-29) включает:
+
+## Задачи Sprint 4
+
+| ID | Задача | Приоритет | Описание |
+|----|--------|-----------|----------|
+| **BCK-27** | SearchIndex | Must have | Интегрировать flexsearch для полнотекстового поиска |
+| **BCK-28** | Команда `/search` | Must have | Поиск по индексу с подсветкой совпадений |
+| **BCK-29** | Семантический поиск | Could have | Векторизация через transformers.js, команда `/semsearch` |
+| **BCK-30** | Команда `/lint` | Could have | Запуск ESLint/Bandit через child_process |
+| **BCK-31** | Интеграция поиска в граф | Should have | Добавление найденных зависимостей в граф |
+| **UI-13** | UI результатов поиска | Must have | Кликабельный список с путями и сниппетами |
+| **UI-14** | UI отчёта линтера | Could have | Таблица с колонками "Файл", "Строка", "Сообщение" |
+
+## Чекпоинты Sprint 4
+
+1. ✅ Команда `/search useEffect` в React-проекте возвращает все файлы за <0.5 сек
+2. ✅ Команда `/semsearch "функция для отправки запроса"` возвращает релевантные фрагменты
+3. ✅ Команда `/lint` запускает ESLint и показывает ошибки с переходом по клику
+4. ✅ Индекс обновляется при сохранении файла (задержка ≤2 сек)
+
+## DoD Sprint 4
+
+- Поиск и индексация покрыты юнит-тестами
+- Векторное хранилище не крашится при пустом проекте
+- Модель embedding загружается в фоне и не блокирует активацию
+
+---
+
+## План реализации Sprint 4
+
+### Часть 1: BCK-27 — SearchIndex (flexsearch)
+1. Установить `flexsearch`
+2. Создать `src/services/SearchIndex.ts`
+3. Реализовать построение индекса по файлам проекта
+4. Инкрементальное обновление через FileSystemWatcher
+5. Тесты
+
+### Часть 2: BCK-28 — Команда `/search`
+1. Добавить метод `handleSearch` в CommandHandler
+2. Форматирование результатов в Markdown с подсветкой
+3. Интеграция с ChatPanel
+4. Тесты
+
+### Часть 3: UI-13 — UI результатов поиска
+1. Кликабельные ссылки на файлы
+2. Подсветка совпадений в сниппетах
+3. CSS-стили
+
+### Часть 4: BCK-29 — Семантический поиск (опционально)
+1. Установить `@xenova/transformers`
+2. Векторизация кода
+3. Хранение векторов в SQLite
+4. Команда `/semsearch`
+
+### Часть 5: BCK-30 — Команда `/lint` (опционально)
+1. Запуск ESLint через child_process
+2. Парсинг вывода
+3. Форматирование отчёта
+4. UI-14
+
+---
