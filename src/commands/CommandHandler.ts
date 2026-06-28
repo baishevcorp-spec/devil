@@ -354,7 +354,7 @@ export class CommandHandler {
   private buildRoadmapPrompt(
     _project: { path: string },
     analysis: ProjectAnalysis,
-    context: { systemPrompt: string },
+    context: any,
     interviewContent: string | null
   ): string {
     const isProjectEmpty = analysis.totalFiles === 0;
@@ -430,10 +430,10 @@ ${context.systemPrompt || 'Нет дополнительного контекс�
     return summary.join('\n');
   }
 
-  private countProjectFiles(tree: { children?: unknown[] } | null): number {
+  private countProjectFiles(tree: any): number {
     let count = 0;
 
-    const traverse = (node: { type?: string; children?: unknown[] }): void => {
+    const traverse = (node: any): void => {
       if (node.type === 'file') {
         count++;
       }
