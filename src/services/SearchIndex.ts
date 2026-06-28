@@ -231,27 +231,34 @@ export class SearchIndex implements ISearchIndex {
   private async scanProjectFiles(): Promise<string[]> {
     const files: string[] = [];
     const excludePatterns = [
-      '**/node_modules/**',
-      '**/.git/**',
-      '**/out/**',
-      '**/dist/**',
-      '**/backups/**',
-      '**/.devil/**',
-      '**/*.min.js',
-      '**/*.min.css'
+      'node_modules',
+      '.git',
+      'out',
+      'dist',
+      'backups',
+      '.devil',
+      '*.min.js',
+      '*.min.css'
     ];
 
     const scanDir = async (dir: string): Promise<void> => {
       const entries = await fs.promises.readdir(dir, { withFileTypes: true });
-
+      
       for (const entry of entries) {
         const fullPath = path.join(dir, entry.name);
-        const relativePath = path.relative(this.projectPath, fullPath);
-
-        if (excludePatterns.some(pattern => {
-          const regex = new RegExp(pattern.replace(/\*\*/g, '.*').replace(/\*/g, '[^/]*'));
-          return regex.test(relativePath);
-        })) {
+        
+        // Проверяем, находится ли текущая директория или файл в списке исключений
+        const isExcluded = excludePatterns.some(pattern => {
+          if (pattern.startsWith('*')) {
+            // Паттерн для файлов (*.min.js)
+            return entry.name.endsWith(pattern.substring(1));
+          } else {
+            // Паттерн для директорий (node_modules, .git)
+            return entry.name === pattern;
+          }
+        });
+        
+        if (isExcluded) {
           continue;
         }
 
@@ -264,7 +271,7 @@ export class SearchIndex implements ISearchIndex {
             '.md', '.json', '.yaml', '.yml', '.xml', '.html', '.css', '.scss',
             '.sql', '.sh', '.bash', '.txt', '.log'
           ];
-
+          
           if (textExtensions.includes(ext)) {
             files.push(fullPath);
           }

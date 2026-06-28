@@ -57,7 +57,7 @@ describe('SearchIndex', () => {
     beforeEach(async () => {
       const file1 = path.join(testDir, 'file1.ts');
       const file2 = path.join(testDir, 'file2.ts');
-      
+
       await fs.writeFile(file1, 'export function useEffect() {}', 'utf-8');
       await fs.writeFile(file2, 'const useState = () => {}', 'utf-8');
 
@@ -67,7 +67,7 @@ describe('SearchIndex', () => {
 
     it('находит совпадения по запросу', async () => {
       const results = await searchIndex.search('useEffect');
-      
+
       expect(results.length).toBeGreaterThan(0);
       expect(results[0].filePath).toBe('file1.ts');
       expect(results[0].content).toContain('useEffect');
@@ -75,20 +75,20 @@ describe('SearchIndex', () => {
 
     it('возвращает результаты с подсветкой', async () => {
       const results = await searchIndex.search('useState');
-      
+
       expect(results.length).toBeGreaterThan(0);
       expect(results[0].highlights.length).toBeGreaterThan(0);
     });
 
     it('поддерживает limit', async () => {
       const results = await searchIndex.search('use', { limit: 1 });
-      
+
       expect(results.length).toBeLessThanOrEqual(1);
     });
 
     it('фильтрует по паттерну файла', async () => {
       const results = await searchIndex.search('use', { filePattern: 'file1' });
-      
+
       expect(results.every(r => r.filePath.includes('file1'))).toBe(true);
     });
   });
@@ -156,7 +156,7 @@ describe('SearchIndex', () => {
       await searchIndex.addToIndex(path.join(testDir, 'test.ts'));
 
       const stats = await searchIndex.getStats();
-      
+
       expect(stats.totalFiles).toBe(1);
       expect(stats.totalDocuments).toBe(2);
       expect(stats.indexSize).toBeGreaterThan(0);
