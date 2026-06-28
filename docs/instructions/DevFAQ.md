@@ -13,7 +13,8 @@
 
 1. Переупаковать расширение: `npx vsce package --allow-missing-repository`
 2. Удалить старую версию в VS Code (Extensions → Devil → Uninstall)
-3. Установить новую: `Extensions → ... (три точки) → Install from VSIX...`
+3. Установить новую: `code --install-extension devil-0.1.0.vsix --force`
+или в ручную:`Extensions → ... (три точки) → Install from VSIX...`
 
 **Совет:** Чтобы не переустанавливать каждый раз при разработке, используйте **режим разработки**:
 
