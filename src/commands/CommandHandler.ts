@@ -924,7 +924,7 @@ export class CommandHandler {
     }
 
     try {
-      const targetPath = args.length > 0 ? args[0] : '.';
+      const targetPath = args.length > 0 ? args[0] : 'src';
       const fullPath = path.join(project.path, targetPath);
 
       // Проверяем, существует ли файл/папка
@@ -936,7 +936,7 @@ export class CommandHandler {
         };
       }
 
-      // Проверяем, установлен ли ESLint в проекте
+      // Проверяем наличие ESLint конфигурации
       const eslintConfigPaths = [
         '.eslintrc.js',
         '.eslintrc.cjs',
@@ -944,7 +944,9 @@ export class CommandHandler {
         '.eslintrc.yml',
         '.eslintrc.json',
         '.eslintrc',
-        'package.json' // ESLint может быть в package.json
+        'eslint.config.js',
+        'eslint.config.mjs',
+        'eslint.config.cjs',
       ];
 
       let eslintConfigFound = false;
@@ -956,28 +958,60 @@ export class CommandHandler {
         }
       }
 
+      // Также проверяем поле eslintConfig в package.json
+      if (!eslintConfigFound) {
+        const pkgPath = path.join(project.path, 'package.json');
+        if (await this.fileSystemService.fileExists(pkgPath)) {
+          try {
+            const pkgContent = await this.fileSystemService.readFile(pkgPath);
+            const pkg = JSON.parse(pkgContent);
+            if (pkg.eslintConfig || pkg.eslint) {
+              eslintConfigFound = true;
+            }
+          } catch {
+            // package.json невалиден — игнорируем
+          }
+        }
+      }
+
       if (!eslintConfigFound) {
         return {
           success: false,
           message: 'ESLint конфигурация не найдена в проекте.\n\n' +
-            'Установите ESLint:\n' +
+            'Установите и настройте ESLint:\n' +
             '```bash\nnpm install --save-dev eslint\nnpx eslint --init\n```',
         };
       }
 
       logger.info('Запуск ESLint для: ' + targetPath, 'CommandHandler');
 
-      // Запускаем ESLint с относительным путем
       const exec = util.promisify(child_process.exec);
       const command = `npx eslint "${targetPath}" --format json`;
 
-      const { stdout, stderr } = await exec(command, {
-        cwd: project.path,
-        maxBuffer: 1024 * 1024 * 10 // 10 MB
-      });
+      let stdout = '';
+      let stderr = '';
+
+      try {
+        const result = await exec(command, {
+          cwd: project.path,
+          maxBuffer: 1024 * 1024 * 10 // 10 MB
+        });
+        stdout = result.stdout;
+        stderr = result.stderr;
+      } catch (execError: any) {
+        // ESLint возвращает exit code 1 при наличии lint-ошибок — это нормально!
+        // stdout в этом случае содержит валидный JSON с результатами
+        if (execError.stdout) {
+          stdout = execError.stdout;
+          stderr = execError.stderr || '';
+          logger.info('ESLint нашёл проблемы (exit code ' + execError.code + '), парсим вывод', 'CommandHandler');
+        } else {
+          // Реальная ошибка: ESLint не установлен, команда не найдена и т.д.
+          throw execError;
+        }
+      }
 
       if (stderr && !stdout) {
-        // Если есть ошибка и нет вывода, значит ESLint не найден
         return {
           success: false,
           message: 'ESLint не найден или произошла ошибка.\n\n' +

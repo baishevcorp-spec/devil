@@ -1,0 +1,16 @@
+# Тесты используют отдельный tsconfig
+tests/
+jest.config.js
+
+# Webview — чистый JS, не TypeScript
+webview/
+
+# Скомпилированный JS
+out/
+dist/
+
+# Зависимости
+node_modules/
+
+# Бэкапы
+backups/
