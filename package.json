@@ -46,6 +46,7 @@
   },
   "dependencies": {
     "axios": "^1.18.1",
+    "flexsearch": "^0.8.212",
     "highlight.js": "^11.11.1",
     "marked": "^18.0.5",
     "sql.js": "^1.14.1"

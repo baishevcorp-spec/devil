@@ -7,6 +7,7 @@ import { LLMProvider } from './services/LLMProvider';
 import { ContextBuilder } from './services/ContextBuilder';
 import { MemoryStore } from './services/MemoryStore';
 import { GitService } from './services/GitService';
+import { SearchIndex } from './services/SearchIndex';
 import { HistoryManager } from './services/HistoryManager';
 import { UserProfileManager } from './services/UserProfileManager';
 import { ChatPanel } from './panels/ChatPanel';
@@ -19,6 +20,7 @@ let llmProvider: LLMProvider;
 let contextBuilder: ContextBuilder;
 let memoryStore: MemoryStore;
 let gitService: GitService;
+let searchIndex: SearchIndex;
 let historyManager: HistoryManager;
 let userProfileManager: UserProfileManager;
 
@@ -34,6 +36,7 @@ export function activate(context: vscode.ExtensionContext): void {
     llmProvider = new LLMProvider(configManager);
     memoryStore = new MemoryStore();
     gitService = new GitService();
+    searchIndex = new SearchIndex(fileSystemService);
     historyManager = new HistoryManager(memoryStore);
     userProfileManager = new UserProfileManager(memoryStore);
 
@@ -80,6 +83,8 @@ export function activate(context: vscode.ExtensionContext): void {
           // Инициализируем MemoryStore для проекта
           await memoryStore.initialize(folder.uri.fsPath);
           await historyManager.initialize(folder.uri.fsPath);
+          await searchIndex.initialize(folder.uri.fsPath);
+          searchIndex.buildIndex().catch(err => logger.error('Ошибка построения индекса', err, 'Extension'));
 
           const project = projectManager.getCurrentProject();
           vscode.window.showInformationMessage(
