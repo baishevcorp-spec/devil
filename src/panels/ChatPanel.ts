@@ -6,6 +6,7 @@ import { ProjectManager } from '../services/ProjectManager';
 import { FileSystemService } from '../services/FileSystemService';
 import { MemoryStore } from '../services/MemoryStore';
 import { GitService } from '../services/GitService';
+import { SearchIndex } from '../services/SearchIndex';
 import { HistoryManager } from '../services/HistoryManager';
 import { CommandHandler } from '../commands/CommandHandler';
 
@@ -37,6 +38,7 @@ export class ChatPanel {
   private readonly fileSystemService: FileSystemService;
   private readonly memoryStore: MemoryStore;
   private readonly gitService: GitService;
+  private readonly searchIndex: SearchIndex;
   private readonly historyManager: HistoryManager;
   private readonly commandHandler: CommandHandler;
 
@@ -48,7 +50,8 @@ export class ChatPanel {
     fileSystemService: FileSystemService,
     memoryStore: MemoryStore,
     gitService: GitService,
-    historyManager: HistoryManager
+    historyManager: HistoryManager,
+    searchIndex: SearchIndex
   ): ChatPanel {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
@@ -82,7 +85,8 @@ export class ChatPanel {
       fileSystemService,
       memoryStore,
       gitService,
-      historyManager
+      historyManager,
+      searchIndex
     );
     return ChatPanel.currentPanel;
   }
@@ -96,7 +100,8 @@ export class ChatPanel {
     fileSystemService: FileSystemService,
     memoryStore: MemoryStore,
     gitService: GitService,
-    historyManager: HistoryManager
+    historyManager: HistoryManager,
+    searchIndex: SearchIndex
   ) {
     this._panel = panel;
     this._extensionUri = extensionUri;
@@ -106,6 +111,7 @@ export class ChatPanel {
     this.fileSystemService = fileSystemService;
     this.memoryStore = memoryStore;
     this.gitService = gitService;
+    this.searchIndex = searchIndex;
     this.historyManager = historyManager;
     this.commandHandler = new CommandHandler(
       fileSystemService,
@@ -113,7 +119,8 @@ export class ChatPanel {
       contextBuilder,
       projectManager,
       memoryStore,
-      gitService
+      gitService,
+      this.searchIndex
     );
 
     this._initializeHistory();

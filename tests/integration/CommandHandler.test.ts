@@ -5,6 +5,7 @@ import { ContextBuilder } from '../../src/services/ContextBuilder';
 import { ProjectManager } from '../../src/services/ProjectManager';
 import { MemoryStore } from '../../src/services/MemoryStore';
 import { GitService } from '../../src/services/GitService';
+import { SearchIndex } from '../../src/services/SearchIndex';
 import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -16,6 +17,7 @@ describe('CommandHandler Integration Tests', () => {
   let projectManager: ProjectManager;
   let memoryStore: MemoryStore;
   let gitService: GitService;
+  let searchIndex: SearchIndex;
   let testDir: string;
 
   const mockLLMProvider = {
@@ -34,6 +36,8 @@ describe('CommandHandler Integration Tests', () => {
     projectManager = new ProjectManager(fsService);
     memoryStore = new MemoryStore();
     gitService = new GitService();
+    searchIndex = new SearchIndex(fsService);
+    await searchIndex.initialize(testDir);
 
     testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'devil-cmd-test-'));
 
@@ -61,7 +65,8 @@ describe('CommandHandler Integration Tests', () => {
       mockContextBuilder,
       projectManager,
       memoryStore,
-      gitService
+      gitService,
+      searchIndex
     );
   });
 
@@ -277,6 +282,37 @@ describe('CommandHandler Integration Tests', () => {
       expect(result).not.toBeNull();
       expect(result!.success).toBe(true);
       expect(result!.message).toContain('Custom');
+    });
+  });
+
+  describe('/search command', () => {
+    it('возвращает подсказку без аргументов', async () => {
+      const result = await commandHandler.handleMessage('/search');
+
+      expect(result).not.toBeNull();
+      expect(result!.success).toBe(false);
+      expect(result!.message).toContain('/search <запрос>');
+    });
+
+    it('возвращает ошибку, если ничего не найдено', async () => {
+      const result = await commandHandler.handleMessage('/search nonexistent123');
+
+      expect(result).not.toBeNull();
+      expect(result!.success).toBe(false);
+      expect(result!.message).toContain('ничего не найдено');
+    });
+
+    it('находит совпадения в индексе', async () => {
+      // Добавляем файл в индекс
+      await fs.writeFile(path.join(testDir, 'test.ts'), 'export function hello() { return "world"; }', 'utf-8');
+      await searchIndex.addToIndex(path.join(testDir, 'test.ts'));
+
+      const result = await commandHandler.handleMessage('/search hello');
+
+      expect(result).not.toBeNull();
+      expect(result!.success).toBe(true);
+      expect(result!.message).toContain('Результаты поиска');
+      expect(result!.message).toContain('hello');
     });
   });
 

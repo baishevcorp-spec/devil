@@ -5,6 +5,7 @@ import { ContextBuilder } from '../services/ContextBuilder';
 import { ProjectManager } from '../services/ProjectManager';
 import { IMemoryStore } from '../interfaces/IMemoryStore';
 import { GitService } from '../services/GitService';
+import { SearchIndex } from '../services/SearchIndex';
 
 export interface CommandResult {
   success: boolean;
@@ -19,7 +20,8 @@ export class CommandHandler {
     private readonly contextBuilder: ContextBuilder,
     private readonly projectManager: ProjectManager,
     private readonly memoryStore: IMemoryStore,
-    private readonly gitService: GitService
+    private readonly gitService: GitService,
+    private readonly searchIndex: SearchIndex
   ) {
     logger.info('CommandHandler инициализирован', 'CommandHandler');
   }
@@ -57,6 +59,8 @@ export class CommandHandler {
         return await this.handleChecklist(args);
       case '/explain':
         return await this.handleExplain(args, selectedCode);
+      case '/search':
+        return await this.handleSearch(args);
       case '/whereis':
         return await this.handleWhereis(args);
       case '/diff':
@@ -318,6 +322,76 @@ export class CommandHandler {
       return {
         success: false,
         message: 'Ошибка объяснения кода: ' + errorMessage,
+      };
+    }
+  }
+
+  private async handleSearch(args: string[]): Promise<CommandResult> {
+    if (args.length === 0) {
+      return {
+        success: false,
+        message:
+          'Использование: /search <запрос>\n\nПример: /search useEffect\n\nИщет по содержимому файлов проекта с использованием полнотекстового индекса.',
+      };
+    }
+
+    const query = args.join(' ');
+    const startTime = Date.now();
+
+    try {
+      const results = await this.searchIndex.search(query, { limit: 50 });
+      const duration = Date.now() - startTime;
+
+      if (results.length === 0) {
+        return {
+          success: false,
+          message: 'По запросу "' + query + '" ничего не найдено.\n\n' +
+            'Убедитесь, что индекс построен (команда выполняется автоматически при открытии проекта).',
+        };
+      }
+
+      const byFile: Record<string, typeof results> = {};
+      for (const result of results) {
+        if (!byFile[result.filePath]) {
+          byFile[result.filePath] = [];
+        }
+        byFile[result.filePath].push(result);
+      }
+
+      const lines: string[] = [];
+      lines.push('## Результаты поиска: "' + query + '"');
+      lines.push('');
+      lines.push('Найдено **' + results.length + '** совпадений в **' + Object.keys(byFile).length + '** файлах за ' + duration + 'мс');
+      lines.push('');
+
+      for (const [filePath, fileResults] of Object.entries(byFile)) {
+        lines.push('### 📄 ' + filePath);
+        lines.push('');
+
+        for (const result of fileResults.slice(0, 5)) {
+          lines.push('**Строка ' + result.line + ':**');
+          lines.push('```');
+          lines.push(result.content.trim());
+          lines.push('```');
+          lines.push('');
+        }
+
+        if (fileResults.length > 5) {
+          lines.push('_... и ещё ' + (fileResults.length - 5) + ' совпадений в этом файле_');
+          lines.push('');
+        }
+      }
+
+      return {
+        success: true,
+        message: lines.join('\n'),
+        data: { query, results, duration, fileCount: Object.keys(byFile).length },
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: 'Ошибка поиска: ' + errorMessage,
       };
     }
   }

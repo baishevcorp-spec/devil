@@ -60,7 +60,8 @@ export function activate(context: vscode.ExtensionContext): void {
         fileSystemService,
         memoryStore,
         gitService,
-        historyManager
+        historyManager,
+        searchIndex
       );
     });
 
@@ -155,7 +156,8 @@ export function activate(context: vscode.ExtensionContext): void {
           fileSystemService,
           memoryStore,
           gitService,
-          historyManager
+          historyManager,
+          searchIndex
         );
 
         const filePath = editor.document.fileName;
