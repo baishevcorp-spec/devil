@@ -6,6 +6,9 @@ import { ProjectManager } from '../services/ProjectManager';
 import { IMemoryStore } from '../interfaces/IMemoryStore';
 import { GitService } from '../services/GitService';
 import { SearchIndex } from '../services/SearchIndex';
+import * as child_process from 'child_process';
+import * as util from 'util';
+import * as path from 'path';
 
 export interface CommandResult {
   success: boolean;
@@ -71,6 +74,8 @@ export class CommandHandler {
         return await this.handleMemory(args);
       case '/view':
         return await this.handleView(args);
+      case '/lint':
+        return await this.handleLint(args);
       case '/help':
         return this.handleHelp();
       default:
@@ -756,6 +761,9 @@ export class CommandHandler {
       '- `/search <запрос>` — поиск по содержимому файлов',
       '- `/whereis <символ>` — найти символ в проекте',
       '',
+      '**Анализ кода:**',
+      '- `/lint [путь]` — запустить ESLint для проверки кода',
+      '',
       '**Файлы:**',
       '- `/git log [файл]` — показать историю коммитов',
       '- `/diff [commit]` — показать изменения в коде',
@@ -781,6 +789,185 @@ export class CommandHandler {
       success: true,
       message: helpText,
     };
+  }
+
+  private async handleLint(args: string[]): Promise<CommandResult> {
+    const project = this.projectManager.getCurrentProject();
+    if (!project) {
+      return {
+        success: false,
+        message: 'Проект не открыт. Используйте команду "Devil: Open Project".',
+      };
+    }
+
+    try {
+      const targetPath = args.length > 0 ? args[0] : '.';
+      const fullPath = path.join(project.path, targetPath);
+
+      // Проверяем, существует ли файл/папка
+      const exists = await this.fileSystemService.fileExists(fullPath);
+      if (!exists) {
+        return {
+          success: false,
+          message: 'Путь не найден: ' + targetPath,
+        };
+      }
+
+      // Проверяем, установлен ли ESLint в проекте
+      const eslintConfigPaths = [
+        '.eslintrc.js',
+        '.eslintrc.cjs',
+        '.eslintrc.yaml',
+        '.eslintrc.yml',
+        '.eslintrc.json',
+        '.eslintrc',
+        'package.json' // ESLint может быть в package.json
+      ];
+
+      let eslintConfigFound = false;
+      for (const configPath of eslintConfigPaths) {
+        const configFullPath = path.join(project.path, configPath);
+        if (await this.fileSystemService.fileExists(configFullPath)) {
+          eslintConfigFound = true;
+          break;
+        }
+      }
+
+      if (!eslintConfigFound) {
+        return {
+          success: false,
+          message: 'ESLint конфигурация не найдена в проекте.\n\n' +
+            'Установите ESLint:\n' +
+            '```bash\nnpm install --save-dev eslint\nnpx eslint --init\n```',
+        };
+      }
+
+      logger.info('Запуск ESLint для: ' + targetPath, 'CommandHandler');
+      
+      // Запускаем ESLint с относительным путем
+      const exec = util.promisify(child_process.exec);
+      const command = `npx eslint "${targetPath}" --format json`;
+      
+      const { stdout, stderr } = await exec(command, {
+        cwd: project.path,
+        maxBuffer: 1024 * 1024 * 10 // 10 MB
+      });
+
+      if (stderr && !stdout) {
+        // Если есть ошибка и нет вывода, значит ESLint не найден
+        return {
+          success: false,
+          message: 'ESLint не найден или произошла ошибка.\n\n' +
+            'Убедитесь, что ESLint установлен:\n' +
+            '```bash\nnpm install --save-dev eslint\n```\n\n' +
+            'Ошибка ESLint:\n' +
+            '```\n' + stderr + '\n```',
+        };
+      }
+
+      // Парсим JSON вывод ESLint
+      let lintResults: Array<{
+        filePath: string;
+        messages: Array<{
+          ruleId: string;
+          severity: number;
+          message: string;
+          line: number;
+          column: number;
+          nodeType?: string;
+        }>;
+        errorCount: number;
+        warningCount: number;
+      }> = [];
+
+      try {
+        lintResults = JSON.parse(stdout.trim());
+      } catch (parseError) {
+        // Если не удалось распарсить JSON, значит ESLint вернул пустой вывод (нет ошибок)
+        if (stdout.trim() === '' && !stderr) {
+          return {
+            success: true,
+            message: '✅ ESLint: Нет ошибок или предупреждений для ' + targetPath,
+            data: { target: targetPath, results: [] }
+          };
+        }
+        
+        // Иначе это ошибка
+        return {
+          success: false,
+          message: 'Не удалось распарсить вывод ESLint:\n```\n' + stdout + '\n```',
+        };
+      }
+
+      // Форматируем резул��таты
+      let totalErrors = 0;
+      let totalWarnings = 0;
+      const lines: string[] = [];
+
+      lines.push('## Отчёт ESLint: ' + targetPath);
+      lines.push('');
+
+      for (const result of lintResults) {
+        totalErrors += result.errorCount;
+        totalWarnings += result.warningCount;
+
+        if (result.messages.length === 0) continue;
+
+        const relativePath = path.relative(project.path, result.filePath);
+        const fileUrl = 'vscode://file/' + result.filePath;
+        lines.push('### 📄 [' + relativePath + '](' + fileUrl + ')');
+        lines.push('');
+        lines.push('| Строка | Столбец | Уровень | Правило | Сообщение |');
+        lines.push('|--------|---------|---------|---------|-----------|');
+
+        for (const message of result.messages) {
+          const severity = message.severity === 2 ? '❌ Ошибка' : '⚠️ Предупреждение';
+          const ruleId = message.ruleId || 'unknown';
+          
+          // Создаём ссылку на конкретную строку
+          const lineUrl = fileUrl + ':' + message.line;
+          
+          lines.push('| **[Строка ' + message.line + '](' + lineUrl + ')** | ' +
+                     message.column + ' | ' + severity + ' | `' + ruleId + '` | ' +
+                     this.escapeTableCell(message.message) + ' |');
+        }
+        lines.push('');
+      }
+
+      // Сводка
+      lines.push('### 📊 Сводка');
+      lines.push('');
+      lines.push('- **Всего файлов:** ' + lintResults.length);
+      lines.push('- **Ошибки:** ' + totalErrors);
+      lines.push('- **Предупреждения:** ' + totalWarnings);
+      lines.push('');
+
+      if (totalErrors === 0 && totalWarnings === 0) {
+        lines.push('✅ **Код соответствует правилам ESLint!**');
+      }
+
+      return {
+        success: true,
+        message: lines.join('\n'),
+        data: {
+          target: targetPath,
+          results: lintResults,
+          summary: { totalErrors, totalWarnings, fileCount: lintResults.length }
+        }
+      };
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: 'Ошибка запуска ESLint: ' + errorMessage,
+      };
+    }
+  }
+
+  private escapeTableCell(text: string): string {
+    // Экранируем символы для таблицы Markdown
+    return text.replace(/\|/g, '\\|').replace(/\n/g, ' ').replace(/\r/g, '');
   }
 
   private getLanguage(filePath: string): string {
