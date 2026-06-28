@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger';
+import { ErrorHandler } from '../utils/ErrorHandler';
 import { FileSystemService } from '../services/FileSystemService';
 import { LLMProvider } from '../services/LLMProvider';
 import { ContextBuilder } from '../services/ContextBuilder';
@@ -42,6 +43,36 @@ export class CommandHandler {
     private readonly searchIndex: SearchIndex
   ) {
     logger.info('CommandHandler инициализирован', 'CommandHandler');
+  }
+
+  
+  private async safeExecute<T>(
+    operation: () => Promise<T>,
+    context: string
+  ): Promise<CommandResult> {
+    try {
+      const result = await operation();
+      return {
+        success: true,
+        message: typeof result === 'string' ? result : JSON.stringify(result),
+        data: result
+      };
+    } catch (error) {
+      const errorHandler = ErrorHandler.getInstance();
+      const devilError = errorHandler.classifyError(error);
+      
+      logger.error('Error in ' + context, {
+        error: devilError.message,
+        type: devilError.type,
+        details: devilError.details
+      }, 'CommandHandler');
+
+      return {
+        success: false,
+        message: devilError.userMessage,
+        data: { errorType: devilError.type }
+      };
+    }
   }
 
   async handleMessage(message: string): Promise<CommandResult | null> {

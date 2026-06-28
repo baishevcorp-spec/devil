@@ -70,7 +70,7 @@ export class ConfigManager {
     this.disposables.push(subscription);
 
     // Синхронизируем debugMode с логгером
-    logger.setDebugEnabled(this.getDebugMode());
+    if (this.getDebugMode()) { logger.setLogLevel(0); } else { logger.setLogLevel(1); }
 
     logger.info('ConfigManager инициализирован', 'ConfigManager');
   }
@@ -181,7 +181,7 @@ export class ConfigManager {
 
   private notifyListeners(): void {
     // Синхронизируем debugMode с логгером при каждом изменении
-    logger.setDebugEnabled(this.getDebugMode());
+    if (this.getDebugMode()) { logger.setLogLevel(0); } else { logger.setLogLevel(1); }
 
     for (const listener of this.changeListeners) {
       try {

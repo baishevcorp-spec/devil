@@ -1,77 +1,141 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
+
+export enum LogLevel {
+  DEBUG = 0,
+  INFO = 1,
+  WARN = 2,
+  ERROR = 3
+}
+
+interface LogEntry {
+  timestamp: string;
+  level: LogLevel;
+  module: string;
+  message: string;
+  details?: unknown;
+}
 
 /**
- * Централизованный логгер для расширения Devil.
+ * Logger — централизованное логирование для расширения Devil.
  * 
- * Все логи выводятся в Output Channel "Devil", который пользователь
- * может открыть через View → Output → Devil.
+ * Сигнатура методов: logger.error(message, details?, module?)
+ * - message: основное сообщение
+ * - details: опциональные детали ошибки (любой тип, включая Error, unknown)
+ * - module: опциональное имя модуля для фильтрации
  * 
- * Уровни логирования:
- * - DEBUG: детальная отладочная информация (включается флагом в конфиге)
- * - INFO:  обычные информационные сообщения
- * - WARN:  предупреждения (некритичные проблемы)
- * - ERROR: ошибки, требующие внимания
+ * Совместимо со всеми существующими вызовами в коде:
+ *   logger.error('Сообщение', error, 'ModuleName')
+ *   logger.error('Сообщение', 'ModuleName')
+ *   logger.error('Сообщение')
  */
-class Logger {
+export class Logger {
   private outputChannel: vscode.OutputChannel;
-  private debugEnabled: boolean = false;
+  private logLevel: LogLevel;
+  private logFilePath: string | null;
+  private logBuffer: LogEntry[] = [];
+  private debugEnabled: boolean;
 
   constructor() {
     this.outputChannel = vscode.window.createOutputChannel('Devil');
+    this.logLevel = LogLevel.INFO;
+    this.logFilePath = null;
+    this.debugEnabled = false;
   }
 
-  /**
-   * Включает/выключает DEBUG-логи.
-   */
+  setLogLevel(level: LogLevel): void {
+    this.logLevel = level;
+  }
+
   setDebugEnabled(enabled: boolean): void {
     this.debugEnabled = enabled;
+    if (enabled) {
+      this.logLevel = LogLevel.DEBUG;
+    } else {
+      this.logLevel = LogLevel.INFO;
+    }
   }
 
-  /**
-   * Показывает Output Channel пользователю.
-   */
+  setLogFilePath(projectPath: string): void {
+    const devilPath = path.join(projectPath, '.devil');
+    const logsPath = path.join(devilPath, 'logs');
+    
+    if (!fs.existsSync(logsPath)) {
+      fs.mkdirSync(logsPath, { recursive: true });
+    }
+    
+    this.logFilePath = path.join(logsPath, `devil-${Date.now()}.log`);
+  }
+
+  debug(message: string, details?: unknown, module?: string): void {
+    this.log(LogLevel.DEBUG, module || 'Unknown', message, details);
+  }
+
+  info(message: string, details?: unknown, module?: string): void {
+    this.log(LogLevel.INFO, module || 'Unknown', message, details);
+  }
+
+  warn(message: string, details?: unknown, module?: string): void {
+    this.log(LogLevel.WARN, module || 'Unknown', message, details);
+  }
+
+  error(message: string, details?: unknown, module?: string): void {
+    this.log(LogLevel.ERROR, module || 'Unknown', message, details);
+  }
+
+  private log(level: LogLevel, module: string, message: string, details?: unknown): void {
+    if (level < this.logLevel) return;
+
+    const entry: LogEntry = {
+      timestamp: new Date().toISOString(),
+      level,
+      module,
+      message,
+      details
+    };
+
+    // Форматированный вывод в VS Code Output Channel
+    const levelStr = LogLevel[level];
+    const formattedMessage = `[${entry.timestamp}] [${levelStr}] [${module}] ${message}`;
+    this.outputChannel.appendLine(formattedMessage);
+
+    if (details !== undefined) {
+      const detailsStr = details instanceof Error 
+        ? `${details.message}\n${details.stack || ''}` 
+        : JSON.stringify(details, null, 2);
+      this.outputChannel.appendLine(detailsStr);
+    }
+
+    // Буферизация для записи в файл
+    this.logBuffer.push(entry);
+
+    // Сброс буфера при достижении размера
+    if (this.logBuffer.length >= 10 && this.logFilePath) {
+      this.flushToFile();
+    }
+  }
+
+  private flushToFile(): void {
+    if (!this.logFilePath || this.logBuffer.length === 0) return;
+
+    try {
+      const content = this.logBuffer.map(entry => JSON.stringify(entry)).join('\n');
+      fs.appendFileSync(this.logFilePath, content + '\n');
+      this.logBuffer = [];
+    } catch {
+      // Не логируем ошибки записи, чтобы избежать бесконечного цикла
+    }
+  }
+
   show(): void {
-    this.outputChannel.show(true);
+    this.outputChannel.show();
   }
 
-  /**
-   * Форматирует сообщение с временной меткой.
-   */
-  private format(level: string, message: string, context?: string): string {
-    const timestamp = new Date().toISOString();
-    const ctx = context ? `[${context}] ` : '';
-    return `[${timestamp}] [${level}] ${ctx}${message}`;
-  }
-
-  debug(message: string, context?: string): void {
-    if (this.debugEnabled) {
-      this.outputChannel.appendLine(this.format('DEBUG', message, context));
-    }
-  }
-
-  info(message: string, context?: string): void {
-    this.outputChannel.appendLine(this.format('INFO', message, context));
-  }
-
-  warn(message: string, context?: string): void {
-    this.outputChannel.appendLine(this.format('WARN', message, context));
-  }
-
-  error(message: string, error?: unknown, context?: string): void {
-    const errorMessage = error instanceof Error ? `: ${error.message}` : '';
-    this.outputChannel.appendLine(this.format('ERROR', message + errorMessage, context));
-    if (error instanceof Error && error.stack) {
-      this.outputChannel.appendLine(error.stack);
-    }
-  }
-
-  /**
-   * Освобождает ресурсы (вызывается при деактивации расширения).
-   */
   dispose(): void {
+    this.flushToFile();
     this.outputChannel.dispose();
   }
 }
 
-// Singleton-экземпляр логгера
 export const logger = new Logger();
