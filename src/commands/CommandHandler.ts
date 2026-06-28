@@ -16,6 +16,17 @@ export interface CommandResult {
   data?: unknown;
 }
 
+interface ProjectAnalysis {
+  totalFiles: number;
+  hasPackageJson: boolean;
+  hasTsConfig: boolean;
+  hasGitignore: boolean;
+  hasReadme: boolean;
+  technology: string;
+  projectStructure: any;
+  projectPath: string;
+}
+
 export class CommandHandler {
   constructor(
     private readonly fileSystemService: FileSystemService,
@@ -144,7 +155,7 @@ export class CommandHandler {
       return {
         success: false,
         message:
-          'Использование: /roadmap generate\n\nСгенерирует план проекта на основе структуры файлов.',
+          'Использование: /roadmap generate\n\nСгенерирует план проекта на основе структуры файлов или предложит создание проведя интервью.',
       };
     }
 
@@ -157,27 +168,14 @@ export class CommandHandler {
     }
 
     try {
-      const context = await this.contextBuilder.buildContext(
-        'Сгенерируй подробный Roadmap для этого проекта',
-        {
-          includeProjectStructure: true,
-          includeRoadmap: false,
-          includeChecklist: false,
-        }
-      );
+      // Анализ состояния проекта
+      const projectAnalysis = await this.analyzeProjectState(project);
 
-      const prompt =
-        'Ты — опытный технический директор. Проанализируй структуру проекта и создай подробный Roadmap разработки.\n\n' +
-        'Структура проекта:\n' +
-        context.systemPrompt +
-        '\n\n' +
-        'Создай Roadmap в формате Markdown с:\n' +
-        '1. Кратким описанием проекта\n' +
-        '2. Основными этапами разработки (с датами)\n' +
-        '3. Ключевыми модулями и их зависимостями\n' +
-        '4. Рисками и митигациями\n' +
-        '5. Критериями готовности для каждого этапа\n\n' +
-        'Отвечай на русском языке.';
+      // Получаем контекст в зависимости от состояния проекта
+      const context = await this.buildRoadmapContext(project, projectAnalysis);
+
+      // Строим промпт в зависимости от состояния проекта
+      const prompt = this.buildRoadmapPrompt(project, projectAnalysis, context);
 
       const response = await this.llmProvider.generate(prompt, {
         systemPrompt: context.systemPrompt,
@@ -198,6 +196,131 @@ export class CommandHandler {
         message: 'Ошибка генерации Roadmap: ' + errorMessage,
       };
     }
+  }
+
+  private async analyzeProjectState(project: any): Promise<ProjectAnalysis> {
+    // Считаем файлы в проекте
+    const allFiles = this.countProjectFiles(project.structure);
+
+    // Проверяем наличие ключевых файлов
+    const hasPackageJson = await this.fileSystemService.fileExists(project.path + '/package.json');
+    const hasTsConfig = await this.fileSystemService.fileExists(project.path + '/tsconfig.json');
+    const hasGitignore = await this.fileSystemService.fileExists(project.path + '/.gitignore');
+    const hasReadme = await this.fileSystemService.fileExists(project.path + '/README.md');
+
+    // Определяем технологию
+    let technology = 'unknown';
+    if (hasTsConfig) {
+      technology = 'typescript';
+    } else if (hasPackageJson) {
+      // Пытаемся определить по package.json
+      try {
+        const packageContent = await this.fileSystemService.readFile(project.path + '/package.json');
+        const pkg = JSON.parse(packageContent);
+        const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+
+        if (deps.react) technology = 'react';
+        else if (deps.vue) technology = 'vue';
+        else if (deps.angular) technology = 'angular';
+        else if (deps.next) technology = 'nextjs';
+        else if (deps['@nestjs/core']) technology = 'nestjs';
+        else if (deps.express) technology = 'express';
+        else technology = 'javascript';
+      } catch {
+        technology = 'javascript';
+      }
+    }
+
+    return {
+      totalFiles: allFiles,
+      hasPackageJson,
+      hasTsConfig,
+      hasGitignore,
+      hasReadme,
+      technology,
+      projectStructure: project.structure,
+      projectPath: project.path
+    };
+  }
+
+  private async buildRoadmapContext(_project: any, analysis: ProjectAnalysis): Promise<any> {
+    // Определяем, сколько информации включать в контекст
+    const includeOptions = {
+      includeProjectStructure: analysis.totalFiles > 0,
+      includeRoadmap: false,
+      includeChecklist: false,
+    };
+
+    const userQuery = analysis.totalFiles === 0
+      ? 'Это новый пустой проект. Нужно создать начальный Roadmap для разработки.'
+      : 'Сгенерируй подробный Roadmap для этого проекта';
+
+    return await this.contextBuilder.buildContext(userQuery, includeOptions);
+  }
+
+  private buildRoadmapPrompt(_project: any, analysis: ProjectAnalysis, context: any): string {
+    // TODO: Здесь будет ваш промпт
+    // Сейчас используем базовый промпт
+
+    return (
+      'Ты — опытный технический директор. Проанализируй состояние проекта и создай подробный Roadmap разработки.\n\n' +
+      this.buildProjectSummary(analysis) +
+      '\n\n' +
+      'Контекст проекта:\n' +
+      context.systemPrompt +
+      '\n\n' +
+      'Создай Roadmap в формате Markdown с:\n' +
+      '1. Кратким описанием проекта\n' +
+      '2. Основными этапами разработки (с датами)\n' +
+      '3. Ключевыми модулями и их зависимостями\n' +
+      '4. Рисками и митигациями\n' +
+      '5. Критериями готовности для каждого этапа\n\n' +
+      'Отвечай на русском языке.'
+    );
+  }
+
+  private buildProjectSummary(analysis: ProjectAnalysis): string {
+    const summary: string[] = [];
+    summary.push('## Анализ состояния проекта:');
+    summary.push('');
+
+    if (analysis.totalFiles === 0) {
+      summary.push('**⚠️ Проект пустой** — нужно создать начальную структуру.');
+    } else {
+      summary.push(`**✅ В проекте ${analysis.totalFiles} файлов**`);
+    }
+
+    summary.push('');
+    summary.push('**Технологический стек:**');
+    summary.push(`- Основная технология: ${analysis.technology}`);
+
+    summary.push('');
+    summary.push('**Ключевые файлы:**');
+    summary.push(`- package.json: ${analysis.hasPackageJson ? '✅ есть' : '❌ нет'}`);
+    summary.push(`- tsconfig.json: ${analysis.hasTsConfig ? '✅ есть' : '❌ нет'}`);
+    summary.push(`- .gitignore: ${analysis.hasGitignore ? '✅ есть' : '❌ нет'}`);
+    summary.push(`- README.md: ${analysis.hasReadme ? '✅ есть' : '❌ нет'}`);
+
+    return summary.join('\n');
+  }
+
+  private countProjectFiles(tree: any): number {
+    let count = 0;
+
+    function traverse(node: any) {
+      if (node.type === 'file') {
+        count++;
+      }
+      if (node.children) {
+        node.children.forEach(traverse);
+      }
+    }
+
+    if (tree && tree.children) {
+      tree.children.forEach(traverse);
+    }
+
+    return count;
   }
 
   private async handleChecklist(args: string[]): Promise<CommandResult> {
@@ -843,11 +966,11 @@ export class CommandHandler {
       }
 
       logger.info('Запуск ESLint для: ' + targetPath, 'CommandHandler');
-      
+
       // Запускаем ESLint с относительным путем
       const exec = util.promisify(child_process.exec);
       const command = `npx eslint "${targetPath}" --format json`;
-      
+
       const { stdout, stderr } = await exec(command, {
         cwd: project.path,
         maxBuffer: 1024 * 1024 * 10 // 10 MB
@@ -891,7 +1014,7 @@ export class CommandHandler {
             data: { target: targetPath, results: [] }
           };
         }
-        
+
         // Иначе это ошибка
         return {
           success: false,
@@ -923,10 +1046,10 @@ export class CommandHandler {
         for (const message of result.messages) {
           const severity = message.severity === 2 ? '❌ Ошибка' : '⚠️ Предупреждение';
           const ruleId = message.ruleId || 'unknown';
-          
+
           // Создаём ссылку на конкретную строку
           const lineUrl = fileUrl + ':' + message.line;
-          
+
           lines.push('| **[Строка ' + message.line + '](' + lineUrl + ')** | ' +
                      message.column + ' | ' + severity + ' | `' + ruleId + '` | ' +
                      this.escapeTableCell(message.message) + ' |');
