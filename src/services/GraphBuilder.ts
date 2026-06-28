@@ -19,21 +19,50 @@ export class GraphBuilder {
   async parseFile(filePath: string, projectPath: string): Promise<ParseResult> {
     const relativePath = path.relative(projectPath, filePath);
 
+    // Исключаем Git временные файлы и служебные файлы
+    if (relativePath.startsWith('.git') || relativePath.endsWith('.git')) {
+      logger.debug('Файл исключён (Git): ' + relativePath, 'GraphBuilder');
+      return { nodes: [], edges: [] };
+    }
+
     try {
       const content = await this.fileSystemService.readFile(filePath);
       const nodes: string[] = [];
       const edges: string[] = [];
 
-      const fileId = await this.memoryStore.addNode({
-        type: 'file',
-        name: path.basename(filePath),
-        path: relativePath,
-        metadata: {
-          extension: path.extname(filePath),
-          size: content.length
-        },
-        tags: []
-      });
+      // Проверяем, есть ли уже узел для этого файла (избегаем дубликатов)
+      let fileId: string;
+      const existingFileNode = await this.memoryStore.getNodeByPath(relativePath);
+      if (existingFileNode) {
+        // Файл уже есть в графе — обновляем метаданные
+        fileId = existingFileNode.id;
+        await this.memoryStore.updateNode(fileId, {
+          metadata: {
+            extension: path.extname(filePath),
+            size: content.length
+          }
+        });
+        // Удаляем старые связи contains, чтобы пересоздать их
+        const oldEdges = await this.memoryStore.getEdgesFrom(fileId);
+        for (const edge of oldEdges) {
+          if (edge.type === 'contains') {
+            await this.memoryStore.deleteEdge(edge.id);
+          }
+        }
+        logger.debug('Файл уже в графе, обновлён: ' + relativePath, 'GraphBuilder');
+      } else {
+        // Файла нет — создаём новый узел
+        fileId = await this.memoryStore.addNode({
+          type: 'file',
+          name: path.basename(filePath),
+          path: relativePath,
+          metadata: {
+            extension: path.extname(filePath),
+            size: content.length
+          },
+          tags: []
+        });
+      }
       nodes.push(fileId);
 
       const ext = path.extname(filePath).toLowerCase();
@@ -41,7 +70,19 @@ export class GraphBuilder {
         const parsedNodes = this.parseCode(content, relativePath);
 
         for (const node of parsedNodes) {
-          const nodeId = await this.memoryStore.addNode(node);
+          // Проверяем, есть ли уже узел с таким именем в этом файле
+          let nodeId: string;
+          const existingNodes = await this.memoryStore.findNodes({ name: node.name, path: relativePath });
+          const existingNode = existingNodes.find(n => n.type === node.type);
+          
+          if (existingNode) {
+            // Узел уже есть — обновляем метаданные
+            nodeId = existingNode.id;
+            await this.memoryStore.updateNode(nodeId, { metadata: node.metadata || {} });
+          } else {
+            // Создаём новый узел
+            nodeId = await this.memoryStore.addNode(node);
+          }
           nodes.push(nodeId);
 
           await this.memoryStore.addEdge({

@@ -8,6 +8,7 @@ import { ContextBuilder } from './services/ContextBuilder';
 import { MemoryStore } from './services/MemoryStore';
 import { GitService } from './services/GitService';
 import { SearchIndex } from './services/SearchIndex';
+import { GraphBuilder } from './services/GraphBuilder';
 import { HistoryManager } from './services/HistoryManager';
 import { UserProfileManager } from './services/UserProfileManager';
 import { ChatPanel } from './panels/ChatPanel';
@@ -21,6 +22,7 @@ let contextBuilder: ContextBuilder;
 let memoryStore: MemoryStore;
 let gitService: GitService;
 let searchIndex: SearchIndex;
+let graphBuilder: GraphBuilder;
 let historyManager: HistoryManager;
 let userProfileManager: UserProfileManager;
 
@@ -37,6 +39,7 @@ export function activate(context: vscode.ExtensionContext): void {
     memoryStore = new MemoryStore();
     gitService = new GitService();
     searchIndex = new SearchIndex(fileSystemService);
+    graphBuilder = new GraphBuilder(fileSystemService, memoryStore);
     historyManager = new HistoryManager(memoryStore);
     userProfileManager = new UserProfileManager(memoryStore);
 
@@ -86,6 +89,30 @@ export function activate(context: vscode.ExtensionContext): void {
           await historyManager.initialize(folder.uri.fsPath);
           await searchIndex.initialize(folder.uri.fsPath);
           searchIndex.buildIndex().catch(err => logger.error('Ошибка построения индекса', err, 'Extension'));
+          
+          // BCK-26: Запускаем GraphBuilder для построения графовой памяти
+          const projectTree = projectManager.getProjectStructure();
+          if (projectTree) {
+            const files = fileSystemService.collectFiles(projectTree, folder.uri.fsPath);
+            logger.info('Запуск парсинга графа: ' + files.length + ' файлов', 'Extension');
+            graphBuilder.parseProject(folder.uri.fsPath, files).catch(err => 
+              logger.error('Ошибка построения графа', err, 'Extension')
+            );
+          } else {
+            logger.warn('Структура проекта пуста, граф не будет построен', 'Extension');
+          }
+          
+          // Подписываемся на изменения файлов для инкрементального обновления графа
+          projectManager.onFileChanged(async (event) => {
+            if (event.type === 'created' || event.type === 'changed') {
+              graphBuilder.updateForFile(event.path, folder.uri.fsPath).catch(err =>
+                logger.error('Ошибка обновления графа для файла', err, 'Extension')
+              );
+            } else if (event.type === 'deleted') {
+              // При удалении файла граф обновится при следующем scan
+              logger.info('Файл удалён: ' + event.path, 'Extension');
+            }
+          });
 
           const project = projectManager.getCurrentProject();
           vscode.window.showInformationMessage(
