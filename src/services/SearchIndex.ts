@@ -146,6 +146,10 @@ export class SearchIndex implements ISearchIndex {
     }
   }
 
+  isInitialized(): boolean {
+    return this.index !== null;
+  }
+
   async search(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
     if (!this.index) {
       throw new Error('SearchIndex не инициализирован');

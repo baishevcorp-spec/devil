@@ -520,6 +520,23 @@ body {
   color: #ce9178 !important;
 }
 
+/* === Links === */
+.message-text a {
+  color: #4ec9b0;
+  text-decoration: none;
+  transition: color 0.2s;
+  cursor: pointer;
+}
+
+.message-text a:hover {
+  color: #73daca;
+  text-decoration: underline;
+}
+
+.message-text a:active {
+  color: #3da895;
+}
+
 /* === Tables === */
 .message-text table {
   border-collapse: collapse;

@@ -335,6 +335,21 @@ export class CommandHandler {
       };
     }
 
+    const project = this.projectManager.getCurrentProject();
+    if (!project) {
+      return {
+        success: false,
+        message: 'Проект не открыт. Используйте команду "Devil: Open Project".',
+      };
+    }
+
+    if (!this.searchIndex.isInitialized()) {
+      return {
+        success: false,
+        message: 'Индекс поиска ещё не построен. Пожалуйста, подождите несколько секунд.',
+      };
+    }
+
     const query = args.join(' ');
     const startTime = Date.now();
 
@@ -365,11 +380,15 @@ export class CommandHandler {
       lines.push('');
 
       for (const [filePath, fileResults] of Object.entries(byFile)) {
-        lines.push('### 📄 ' + filePath);
+        // Создаём кликабельную ссылку на файл
+        const fileUrl = project ? 'vscode://file/' + project.path + '/' + filePath : filePath;
+        lines.push('### 📄 [' + filePath + '](' + fileUrl + ')');
         lines.push('');
 
         for (const result of fileResults.slice(0, 5)) {
-          lines.push('**Строка ' + result.line + ':**');
+          // Добавляем кликабельную ссылку на строку
+          const lineUrl = fileUrl + ':' + result.line;
+          lines.push('**[Строка ' + result.line + '](' + lineUrl + ')**');
           lines.push('```');
           lines.push(result.content.trim());
           lines.push('```');
@@ -733,10 +752,13 @@ export class CommandHandler {
     const helpText = [
       '## Доступные команды',
       '',
+      '**Поиск:**',
+      '- `/search <запрос>` — поиск по содержимому файлов',
+      '- `/whereis <символ>` — найти символ в проекте',
+      '',
       '**Файлы:**',
       '- `/git log [файл]` — показать историю коммитов',
       '- `/diff [commit]` — показать изменения в коде',
-      '- `/whereis <символ>` — найти символ в проекте',
       '- `/memory show` — показать графовую память',
       '- `/view roadmap` — показать Roadmap проекта',
       '- `/view checklist` — показать чек-лист',

@@ -190,6 +190,8 @@
       case 'agentResponse':
         removeLoadingIndicator();
         addMessage('assistant', message.content);
+        // После добавления сообщения добавляем обработчики кликов по ссылкам
+        setTimeout(() => setupFileLinkHandlers(), 100);
         break;
       case 'error':
         removeLoadingIndicator();
@@ -209,4 +211,37 @@
         break;
     }
   });
+
+  // Обработка кликов по ссылкам на файлы
+  function setupFileLinkHandlers() {
+    const links = document.querySelectorAll('a');
+    links.forEach(link => {
+      const href = link.getAttribute('href');
+      if (href && href.startsWith('vscode://file/')) {
+        link.addEventListener('click', function (e) {
+          e.preventDefault();
+          // Парсим путь и строку из URL
+          // Формат: vscode://file/path/to/file.js:42
+          const url = href.substring('vscode://file/'.length);
+          const lineMatch = url.match(/:(\d+)$/);
+          let filePath = url;
+          let line = 1;
+
+          if (lineMatch) {
+            line = parseInt(lineMatch[1], 10);
+            filePath = url.substring(0, url.lastIndexOf(':'));
+          }
+
+          vscode.postMessage({
+            type: 'openFile',
+            filePath: filePath,
+            line: line
+          });
+        });
+      }
+    });
+  }
+
+  // Запускаем обработчики для существующих сообщений
+  setTimeout(() => setupFileLinkHandlers(), 300);
 })();

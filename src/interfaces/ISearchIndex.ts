@@ -67,4 +67,9 @@ export interface ISearchIndex {
    * Очищает индекс.
    */
   clear(): Promise<void>;
+
+  /**
+   * Проверяет, инициализирован ли индекс.
+   */
+  isInitialized(): boolean;
 }

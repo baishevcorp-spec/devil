@@ -155,6 +155,12 @@ export class ChatPanel {
 
   private async _handleMessage(message: WebviewMessage): Promise<void> {
     switch (message.type) {
+      case 'openFile': {
+        const filePath = message.filePath as string;
+        const line = message.line as number;
+        await this._openFile(filePath, line);
+        break;
+      }
       case 'userMessage': {
         const content = message.content || '';
         logger.info('Получено сообщение: ' + content.substring(0, 50), 'ChatPanel');
@@ -255,6 +261,25 @@ export class ChatPanel {
     }
 
     logger.info('ChatPanel остановлен', 'ChatPanel');
+  }
+
+  private async _openFile(filePath: string, line: number): Promise<void> {
+    try {
+      const uri = vscode.Uri.file(filePath);
+      const doc = await vscode.workspace.openTextDocument(uri);
+      const editor = await vscode.window.showTextDocument(doc);
+
+      // Переместить курсор на указанную строку
+      const position = new vscode.Position(line - 1, 0);
+      editor.selection = new vscode.Selection(position, position);
+      editor.revealRange(
+        new vscode.Range(position, position),
+        vscode.TextEditorRevealType.InCenterIfOutsideViewport
+      );
+    } catch (error) {
+      logger.error('Не удалось открыть файл', error, 'ChatPanel');
+      vscode.window.showErrorMessage('Не удалось открыть файл: ' + filePath);
+    }
   }
 
   private _update(): void {
@@ -411,7 +436,7 @@ export class ChatPanel {
       '                </button>' +
       '            </div>' +
       '            <div class="input-hints">' +
-      '                <span class="hint">💡 Команды: /help, /scan, /diff, /whereis, /memory show, /roadmap generate, /checklist generate, /explain</span>' +
+      '                <span class="hint">💡 Команды: /help, /search, /scan, /diff, /whereis, /memory show, /roadmap generate, /checklist generate, /explain</span>' +
       '            </div>' +
       '        </div>' +
       '    </div>' +
