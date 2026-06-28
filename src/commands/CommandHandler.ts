@@ -28,6 +28,10 @@ interface ProjectAnalysis {
 }
 
 export class CommandHandler {
+  // Константы для файлов
+  private readonly INTERVIEW_FILENAME = 'interview.md';
+  private readonly ROADMAP_FILENAME = 'roadmap.md';
+
   constructor(
     private readonly fileSystemService: FileSystemService,
     private readonly llmProvider: LLMProvider,
@@ -155,7 +159,7 @@ export class CommandHandler {
       return {
         success: false,
         message:
-          'Использование: /roadmap generate\n\nСгенерирует план проекта на основе структуры файлов или предложит создание проведя интервью.',
+          'Использование: /roadmap generate\n\nСгенерирует план проекта на основе структуры файлов или проведёт интервью для пустого проекта.',
       };
     }
 
@@ -167,21 +171,52 @@ export class CommandHandler {
       };
     }
 
+    const interviewPath = path.join(project.devilPath, this.INTERVIEW_FILENAME);
+    const roadmapPath = path.join(project.devilPath, this.ROADMAP_FILENAME);
+
     try {
-      // Анализ состояния проекта
-      const projectAnalysis = await this.analyzeProjectState(project);
+      // 1. Анализ состояния проекта
+      const analysis = await this.analyzeProjectState(project);
+      const isProjectEmpty = analysis.totalFiles === 0;
 
-      // Получаем контекст в зависимости от состояния проекта
-      const context = await this.buildRoadmapContext(project, projectAnalysis);
+      // 2. Проверяем наличие файла интервью
+      const hasInterview = await this.fileSystemService.fileExists(interviewPath);
 
-      // Строим промпт в зависимости от состояния проекта
-      const prompt = this.buildRoadmapPrompt(project, projectAnalysis, context);
+      // 3. Если проект пустой и интервью нет — запускаем процесс интервью
+      if (isProjectEmpty && !hasInterview) {
+        return await this.startInterview(project, analysis);
+      }
+
+      // 4. Если проект пустой, но интервью есть — читаем его и генерируем roadmap
+      let interviewContent: string | null = null;
+      if (isProjectEmpty && hasInterview) {
+        interviewContent = await this.fileSystemService.readFile(interviewPath);
+        // Проверяем, что файл содержит не только вопросы (хотя бы несколько слов)
+        // Для простоты считаем, что если файл не пустой, то пользователь заполнил его.
+        if (!interviewContent || interviewContent.trim().length < 10) {
+          return {
+            success: false,
+            message:
+              '📄 Файл интервью `.devil/interview.md` пуст или слишком короткий.\n' +
+              'Пожалуйста, откройте его, напишите ответы на вопросы и выполните команду снова.',
+          };
+        }
+      }
+
+      // 5. Если проект непустой, но интервью есть — можем использовать его как доп. контекст
+      if (!isProjectEmpty && hasInterview) {
+        interviewContent = await this.fileSystemService.readFile(interviewPath);
+      }
+
+      // 6. Строим контекст и промпт с учётом интервью
+      const context = await this.buildRoadmapContext(project, analysis);
+      const prompt = this.buildRoadmapPrompt(project, analysis, context, interviewContent);
 
       const response = await this.llmProvider.generate(prompt, {
         systemPrompt: context.systemPrompt,
       });
 
-      const roadmapPath = project.devilPath + '/roadmap.md';
+      // Сохраняем roadmap
       await this.fileSystemService.writeFile(roadmapPath, response.content);
 
       return {
@@ -196,6 +231,59 @@ export class CommandHandler {
         message: 'Ошибка генерации Roadmap: ' + errorMessage,
       };
     }
+  }
+
+  // ---------- Запуск интервью для пустого проекта ----------
+  private async startInterview(project: any, analysis: ProjectAnalysis): Promise<CommandResult> {
+    // Генерируем вопросы через LLM
+    const prompt = this.buildInterviewPrompt(analysis);
+    const response = await this.llmProvider.generate(prompt, {
+      systemPrompt: 'Ты — опытный технический директор. Твоя задача — задать уточняющие вопросы для нового проекта.',
+    });
+
+    const interviewContent = response.content;
+    const interviewPath = path.join(project.devilPath, this.INTERVIEW_FILENAME);
+
+    // Сохраняем вопросы в файл
+    await this.fileSystemService.writeFile(interviewPath, interviewContent);
+
+    return {
+      success: true,
+      message:
+        '📋 **Проект пустой. Для начала нужно провести интервью.**\n\n' +
+        'Я сгенерировал список вопросов и сохранил их в файл:\n' +
+        '`.devil/interview.md`\n\n' +
+        '**Пожалуйста, откройте этот файл, напишите ответы на каждый вопрос,**\n' +
+        'а затем повторно выполните команду `/roadmap generate`,\n' +
+        'чтобы получить итоговый Roadmap.\n\n' +
+        '---\n\n' +
+        interviewContent,
+      data: { path: interviewPath, content: interviewContent },
+    };
+  }
+
+  // ---------- Промпт для генерации вопросов интервью ----------
+  private buildInterviewPrompt(analysis: ProjectAnalysis): string {
+    return `
+Ты — опытный технический директор. Проект только начинается, и нужно собрать требования.
+
+Проанализируй следующую информацию (она минимальна):
+- Технология (определена предположительно): ${analysis.technology}
+- Проект пустой, нет ни одного файла.
+
+Твоя задача — **задать 5–7 конкретных вопросов**, которые помогут сформировать дорожную карту.
+Вопросы должны касаться:
+- Цели проекта и бизнес-задачи
+- Целевая аудитория
+- Основной функционал (MVP)
+- Технические ограничения (стек, инфраструктура)
+- Сроки и бюджет (если применимо)
+- Команда и роли
+
+Формат ответа: просто список вопросов с нумерацией (1., 2., ...).
+Не добавляй лишнего текста, только вопросы.
+Отвечай на русском языке.
+`;
   }
 
   private async analyzeProjectState(project: any): Promise<ProjectAnalysis> {
@@ -258,25 +346,58 @@ export class CommandHandler {
     return await this.contextBuilder.buildContext(userQuery, includeOptions);
   }
 
-  private buildRoadmapPrompt(_project: any, analysis: ProjectAnalysis, context: any): string {
-    // TODO: Здесь будет ваш промпт
-    // Сейчас используем базовый промпт
+  private buildRoadmapPrompt(
+    _project: any,
+    analysis: ProjectAnalysis,
+    context: any,
+    interviewContent: string | null
+  ): string {
+    const isProjectEmpty = analysis.totalFiles === 0;
 
-    return (
-      'Ты — опытный технический директор. Проанализируй состояние проекта и создай подробный Roadmap разработки.\n\n' +
-      this.buildProjectSummary(analysis) +
-      '\n\n' +
-      'Контекст проекта:\n' +
-      context.systemPrompt +
-      '\n\n' +
-      'Создай Roadmap в формате Markdown с:\n' +
-      '1. Кратким описанием проекта\n' +
-      '2. Основными этапами разработки (с датами)\n' +
-      '3. Ключевыми модулями и их зависимостями\n' +
-      '4. Рисками и митигациями\n' +
-      '5. Критериями готовности для каждого этапа\n\n' +
-      'Отвечай на русском языке.'
-    );
+    let interviewSection = '';
+    if (interviewContent) {
+      interviewSection = `
+**Дополнительные данные из интервью (ответы пользователя):**
+${interviewContent}
+
+Учти эти ответы при построении Roadmap.
+`;
+    }
+
+    let instructions = '';
+    if (isProjectEmpty) {
+      instructions = `
+**⚠️ Проект пустой.** На основе ответов из интервью (см. ниже) составь детальный Roadmap.
+Не задавай больше вопросов, просто создай план разработки.
+`;
+    } else {
+      instructions = `
+**✅ Проект непустой.** Проанализируй существующую структуру и создай Roadmap.
+${interviewContent ? 'Дополнительно учти ответы из интервью, если они есть.' : ''}
+`;
+    }
+
+    return `
+Ты — опытный технический директор. Создай Roadmap в формате Markdown.
+
+${this.buildProjectSummary(analysis)}
+
+${interviewSection}
+
+${instructions}
+
+Контекст проекта:
+${context.systemPrompt || 'Нет дополнительного контекста.'}
+
+Формат Roadmap:
+1. Краткое описание проекта
+2. Основные этапы (с датами или порядком)
+3. Модули и их зависимости
+4. Риски и митигации
+5. Критерии готовности каждого этапа
+
+Отвечай на русском языке.
+`;
   }
 
   private buildProjectSummary(analysis: ProjectAnalysis): string {
@@ -1056,7 +1177,7 @@ export class CommandHandler {
         };
       }
 
-      // Форматируем резул��таты
+      // Форматируем результаты
       let totalErrors = 0;
       let totalWarnings = 0;
       const lines: string[] = [];
