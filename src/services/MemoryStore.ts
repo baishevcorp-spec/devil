@@ -139,7 +139,7 @@ export class MemoryStore implements IMemoryStore {
       CREATE TABLE IF NOT EXISTS change_log (
         id TEXT PRIMARY KEY,
         project_path TEXT NOT NULL,
-        action TEXT NOT NULL CHECK (action IN ('create', 'update', 'delete', 'scan', 'generate')),
+        action TEXT NOT NULL CHECK (action IN ('create', 'update', 'delete', 'scan', 'generate', 'lint_error', 'search_hit')),
         target TEXT NOT NULL,
         description TEXT,
         metadata TEXT DEFAULT '{}',
@@ -195,6 +195,33 @@ export class MemoryStore implements IMemoryStore {
         Date.now(),
       ]);
       logger.info('Применена миграция: 001_initial_schema', 'MemoryStore');
+    }
+
+    if (!applied.includes('002_extend_change_log_actions')) {
+      // Обновляем таблицу change_log для поддержки новых типов действий
+      // SQLite не поддерживает ALTER TABLE DROP CONSTRAINT, поэтому пересоздаём
+      this.db.run(`
+        CREATE TABLE IF NOT EXISTS change_log_new (
+          id TEXT PRIMARY KEY,
+          project_path TEXT NOT NULL,
+          action TEXT NOT NULL CHECK (action IN ('create', 'update', 'delete', 'scan', 'generate', 'lint_error', 'search_hit')),
+          target TEXT NOT NULL,
+          description TEXT,
+          metadata TEXT DEFAULT '{}',
+          created_at INTEGER NOT NULL
+        )
+      `);
+      this.db.run('INSERT INTO change_log_new SELECT * FROM change_log');
+      this.db.run('DROP TABLE change_log');
+      this.db.run('ALTER TABLE change_log_new RENAME TO change_log');
+      this.db.run('CREATE INDEX IF NOT EXISTS idx_change_log_project_path ON change_log(project_path)');
+      this.db.run('CREATE INDEX IF NOT EXISTS idx_change_log_created_at ON change_log(created_at)');
+      
+      this.db.run(
+        'INSERT INTO migrations (name, applied_at) VALUES (?, ?)',
+        ['002_extend_change_log_actions', Date.now()]
+      );
+      logger.info('Применена миграция: 002_extend_change_log_actions', 'MemoryStore');
     }
   }
 
