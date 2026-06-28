@@ -158,7 +158,7 @@ export function activate(context: vscode.ExtensionContext): void {
         let relativePath = filePath;
       if (project) {
         relativePath = path.relative(project.path, filePath);
-        relativePath = relativePath.split(path.sep).join('/');.replace(/^[/\\]/, '');
+        relativePath = relativePath.split(path.sep).join('/');
         }
 
         const command = '/explain ' + relativePath + ' --- ' + selectedText.replace(/\n/g, ' ');
