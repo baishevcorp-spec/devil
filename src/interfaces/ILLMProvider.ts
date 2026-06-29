@@ -1,13 +1,13 @@
 /**
  * Интерфейс для работы с LLM API.
- * 
+ *
  * Определяет контракт для всех провайдеров LLM (OpenAI, Anthropic, Ollama, прокси-сервисы).
  * Реализация этого интерфейса должна обрабатывать:
  * - Отправку запросов к API
  * - Обработку ответов (streaming и non-streaming)
  * - Повторные попытки при ошибках
  * - Логирование запросов/ответов
- * 
+ *
  * @example
  * ```typescript
  * const provider = new LLMProvider(configManager);
@@ -18,10 +18,12 @@
  * console.log(response.content);
  * ```
  */
+import { ModelConfig } from './IMultiModelManager';
+
 export interface ILLMProvider {
   /**
    * Генерирует ответ от LLM на основе промпта.
-   * 
+   *
    * @param prompt - Текст запроса (системный промпт + пользовательский запрос)
    * @param options - Опции генерации (температура, максимальное количество токенов, и т.д.)
    * @returns Promise с ответом от LLM
@@ -31,7 +33,7 @@ export interface ILLMProvider {
 
   /**
    * Генерирует ответ от LLM в режиме streaming (поток токенов).
-   * 
+   *
    * @param prompt - Текст запроса
    * @param options - Опции генерации
    * @returns AsyncIterable<string> - поток токенов
@@ -41,38 +43,46 @@ export interface ILLMProvider {
 
   /**
    * Устанавливает модель для генерации.
-   * 
+   *
    * @param model - Имя модели (например, 'gpt-4o-mini', 'claude-3-opus')
    */
   setModel(model: string): void;
 
   /**
    * Устанавливает base URL для API.
-   * 
+   *
    * @param url - Base URL (например, 'https://api.openai.com/v1')
    */
   setBaseUrl(url: string): void;
 
   /**
    * Устанавливает API-ключ для аутентификации.
-   * 
+   *
    * @param key - API-ключ
    */
   setApiKey(key: string): void;
 
   /**
    * Получает текущую модель.
-   * 
+   *
    * @returns Имя текущей модели
    */
   getModel(): string;
 
   /**
    * Получает текущий base URL.
-   * 
+   *
    * @returns Base URL API
    */
   getBaseUrl(): string;
+
+  /**
+   * Применяет полную конфигурацию модели (baseUrl, apiKey, model, temperature, maxTokens, maxRetries).
+   * Используется MultiModelManager для переключения между моделями.
+   *
+   * @param config - Конфигурация модели из MultiModelManager
+   */
+  applyModelConfig(config: ModelConfig): void;
 }
 
 /**

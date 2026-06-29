@@ -2,6 +2,7 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import { ConfigManager } from './ConfigManager';
 import { LLMError, NetworkError } from '../utils/errors';
 import { logger } from '../utils/logger';
+import { ModelConfig } from '../interfaces/IMultiModelManager';
 import {
   ILLMProvider,
   GenerateOptions,
@@ -10,28 +11,28 @@ import {
 
 /**
  * LLMProvider — HTTP-клиент для работы с OpenAI-совместимым API.
- * 
+ *
  * Отвечает за:
  * - Отправку запросов к LLM API (generate, generateStream)
  * - Обработку ответов (streaming и non-streaming)
  * - Повторные попытки при ошибках (retry logic)
  * - Логирование запросов/ответов
- * 
+ *
  * Поддерживает:
  * - OpenAI API (https://api.openai.com/v1)
  * - Прокси-сервисы (например, https://api.myproxyapi.ru/v1)
  * - Локальные модели (Ollama: http://localhost:11434/v1)
- * 
+ *
  * @example
  * ```typescript
  * const configManager = new ConfigManager();
  * const llmProvider = new LLMProvider(configManager);
- * 
+ *
  * const response = await llmProvider.generate('Объясни этот код', {
  *   temperature: 0.7,
  *   maxTokens: 1000
  * });
- * 
+ *
  * console.log(response.content);
  * console.log(`Использовано токенов: ${response.tokensUsed}`);
  * ```
@@ -84,7 +85,7 @@ export class LLMProvider implements ILLMProvider {
         return response;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        
+
         if (error instanceof LLMError && !error.retryable) {
           logger.error(`Неразрешимая ошибка LLM (попытка ${attempt})`, error, 'LLMProvider');
           throw error;
@@ -105,7 +106,7 @@ export class LLMProvider implements ILLMProvider {
       // Если это NetworkError (проблемы с сетью), выбрасываем его, а не оборачиваем в LLMError
       throw lastError;
     }
-    
+
     throw new LLMError(
       'Failed after ' + maxRetries + ' attempts: ' + (lastError?.message || 'Unknown error'),
       false,
@@ -148,14 +149,14 @@ export class LLMProvider implements ILLMProvider {
       // Обрабатываем поток данных
       for await (const chunk of response.data) {
         const lines = chunk.toString().split('\n').filter((line: string) => line.trim() !== '');
-        
+
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             const data = line.slice(6);
             if (data === '[DONE]') {
               return;
             }
-            
+
             try {
               const parsed = JSON.parse(data);
               const content = parsed.choices?.[0]?.delta?.content;
@@ -198,6 +199,20 @@ export class LLMProvider implements ILLMProvider {
   }
 
   /**
+   * Применяет полную конфигурацию модели из MultiModelManager.
+   * Устанавливает baseUrl, apiKey, model одним вызовом.
+   * Используется для переключения между моделями через команду /model switch.
+   *
+   * @param config - Конфигурация модели из MultiModelManager
+   */
+  applyModelConfig(config: ModelConfig): void {
+    this.setBaseUrl(config.baseUrl);
+    this.setApiKey(config.apiKey);
+    this.setModel(config.model);
+    logger.info('Применена конфигурация модели: ' + config.name + ' (' + config.model + ')', 'LLMProvider');
+  }
+
+  /**
    * Отправляет запрос к LLM API.
    */
   private async sendRequest(
@@ -233,9 +248,9 @@ export class LLMProvider implements ILLMProvider {
       if (!data.choices || data.choices.length === 0) {
         throw new LLMError('No choices in response', false, 'LLM не вернул ответ.');
       }
-      
+
       const choice = data.choices[0];
-      
+
       if (!choice.message || typeof choice.message.content !== 'string') {
         throw new LLMError('Invalid choice format', false, 'LLM вернул некорректный ответ.');
       }
@@ -265,34 +280,34 @@ export class LLMProvider implements ILLMProvider {
   private wrapError(error: unknown): LLMError | NetworkError {
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError;
-      
+
       if (axiosError.response) {
         // Сервер вернул ошибку (4xx, 5xx)
         const status = axiosError.response.status;
         const message = `API error: ${status} - ${JSON.stringify(axiosError.response.data)}`;
-        
+
         if (status === 429) {
           return new LLMError(message, true, 'Превышен лимит запросов. Подождите и попробуйте снова.');
         }
-        
+
         if (status >= 500) {
           return new NetworkError(message, status, 'Сервер LLM временно недоступен. Попробуйте позже.');
         }
-        
+
         return new LLMError(message, false, `Ошибка API: ${status}`);
       }
-      
+
       if (axiosError.code === 'ECONNABORTED') {
         return new NetworkError('Request timeout', undefined, 'Превышено время ожидания ответа от LLM.');
       }
-      
+
       return new NetworkError(
         axiosError.message,
         undefined,
         'Ошибка соединения. Проверьте интернет и настройки.'
       );
     }
-    
+
     return new LLMError(
       error instanceof Error ? error.message : String(error),
       false,
