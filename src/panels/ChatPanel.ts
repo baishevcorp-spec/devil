@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { logger } from '../utils/logger';
 import { LLMProvider } from '../services/LLMProvider';
 import { ContextBuilder } from '../services/ContextBuilder';
-import { ProjectManager } from '../services/ProjectManager';
+import { IProjectManager } from '../interfaces/IProjectManager';
 import { FileSystemService } from '../services/FileSystemService';
 import { MemoryStore } from '../services/MemoryStore';
 import { GitService } from '../services/GitService';
@@ -35,7 +35,7 @@ export class ChatPanel {
 
   private readonly llmProvider: LLMProvider;
   private readonly contextBuilder: ContextBuilder;
-  private readonly projectManager: ProjectManager;
+  private readonly projectManager: IProjectManager;
   private readonly fileSystemService: FileSystemService;
   private readonly memoryStore: MemoryStore;
   private readonly gitService: GitService;
@@ -47,7 +47,7 @@ export class ChatPanel {
     extensionUri: vscode.Uri,
     llmProvider: LLMProvider,
     contextBuilder: ContextBuilder,
-    projectManager: ProjectManager,
+    projectManager: IProjectManager,
     fileSystemService: FileSystemService,
     memoryStore: MemoryStore,
     gitService: GitService,
@@ -99,7 +99,7 @@ export class ChatPanel {
     extensionUri: vscode.Uri,
     llmProvider: LLMProvider,
     contextBuilder: ContextBuilder,
-    projectManager: ProjectManager,
+    projectManager: IProjectManager,
     fileSystemService: FileSystemService,
     memoryStore: MemoryStore,
     gitService: GitService,

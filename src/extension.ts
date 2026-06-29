@@ -3,6 +3,7 @@ import * as path from 'path';
 import { ConfigManager } from './services/ConfigManager';
 import { FileSystemService } from './services/FileSystemService';
 import { ProjectManager } from './services/ProjectManager';
+import { IProjectManager } from './interfaces/IProjectManager';
 import { LLMProvider } from './services/LLMProvider';
 import { ContextBuilder } from './services/ContextBuilder';
 import { MemoryStore } from './services/MemoryStore';
@@ -16,7 +17,7 @@ import { logger } from './utils/logger';
 
 let configManager: ConfigManager;
 let fileSystemService: FileSystemService;
-let projectManager: ProjectManager;
+let projectManager: IProjectManager;
 let llmProvider: LLMProvider;
 let contextBuilder: ContextBuilder;
 let memoryStore: MemoryStore;
@@ -89,20 +90,27 @@ export function activate(context: vscode.ExtensionContext): void {
           await memoryStore.initialize(folder.uri.fsPath);
           await historyManager.initialize(folder.uri.fsPath);
           await searchIndex.initialize(folder.uri.fsPath);
-          searchIndex.buildIndex().catch(err => logger.error('Ошибка построения индекса', err, 'Extension'));
-          
+
           // BCK-26: Запускаем GraphBuilder для построения графовой памяти
+          // DEVOPS-09: Используем buildIndexFromTree для избежания двойного сканирования ФС
           const projectTree = projectManager.getProjectStructure();
           if (projectTree) {
             const files = fileSystemService.collectFiles(projectTree, folder.uri.fsPath);
-            logger.info('Запуск парсинга графа: ' + files.length + ' файлов', 'Extension');
-            graphBuilder.parseProject(folder.uri.fsPath, files).catch(err => 
+            logger.info('Запуск индексации: ' + files.length + ' файлов', 'Extension');
+            
+            // Индексируем код для быстрого поиска
+            searchIndex.buildIndexFromTree(files).catch(err =>
+              logger.error('Ошибка индексации', err, 'Extension')
+            );
+            
+            // Строим графовую память
+            graphBuilder.parseProject(folder.uri.fsPath, files).catch(err =>
               logger.error('Ошибка построения графа', err, 'Extension')
             );
           } else {
-            logger.warn('Структура проекта пуста, граф не будет построен', 'Extension');
+            logger.warn('Структура проекта пуста, индекс и граф не будут построены', 'Extension');
           }
-          
+
           // Подписываемся на изменения файлов для инкрементального обновления графа
           projectManager.onFileChanged(async (event) => {
             if (event.type === 'created' || event.type === 'changed') {

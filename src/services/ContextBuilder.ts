@@ -1,4 +1,4 @@
-import { ProjectManager, ProjectInfo } from './ProjectManager';
+import { IProjectManager, ProjectInfo } from '../interfaces/IProjectManager';
 import * as path from 'path';
 import { FileSystemService, FileTree } from './FileSystemService';
 import { IMemoryStore } from '../interfaces/IMemoryStore';
@@ -91,7 +91,7 @@ export interface ContextResult {
  */
 export class ContextBuilder {
   constructor(
-    private readonly projectManager: ProjectManager,
+    private readonly projectManager: IProjectManager,
     private readonly fileSystemService: FileSystemService,
     private readonly memoryStore: IMemoryStore | null = null,
     private readonly userProfileManager: IUserProfileManager | null = null
@@ -146,7 +146,7 @@ export class ContextBuilder {
 
     // 2. Структура проекта
     if (options.includeProjectStructure !== false) {
-      const structure = this.buildProjectStructure(project.structure);
+      const structure = this.buildProjectStructure(project.structure as FileTree);
       if (structure) {
         parts.push(structure);
         metadata.projectStructureIncluded = true;

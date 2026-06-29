@@ -71,7 +71,7 @@ describe('ProjectManager', () => {
 
       const project = projectManager.getCurrentProject();
       expect(project!.structure).toBeDefined();
-      expect(project!.structure.type).toBe('directory');
+      expect(project!.structure!.type).toBe('directory');
       expect(project!.fileCount).toBeGreaterThan(0);
     });
   });

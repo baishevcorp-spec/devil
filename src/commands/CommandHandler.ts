@@ -3,7 +3,7 @@ import { ErrorHandler } from '../utils/ErrorHandler';
 import { FileSystemService } from '../services/FileSystemService';
 import { LLMProvider } from '../services/LLMProvider';
 import { ContextBuilder } from '../services/ContextBuilder';
-import { ProjectManager } from '../services/ProjectManager';
+import { IProjectManager } from '../interfaces/IProjectManager';
 import { IMemoryStore } from '../interfaces/IMemoryStore';
 import { GitService } from '../services/GitService';
 import { SearchIndex } from '../services/SearchIndex';
@@ -38,7 +38,7 @@ export class CommandHandler {
     private readonly fileSystemService: FileSystemService,
     private readonly llmProvider: LLMProvider,
     private readonly contextBuilder: ContextBuilder,
-    private readonly projectManager: ProjectManager,
+    private readonly projectManager: IProjectManager,
     private readonly memoryStore: IMemoryStore,
     private readonly gitService: GitService,
     private readonly searchIndex: SearchIndex,
@@ -323,7 +323,7 @@ export class CommandHandler {
 `;
   }
 
-  private async analyzeProjectState(project: { path: string; structure: unknown }): Promise<ProjectAnalysis> {
+  private async analyzeProjectState(project: { path: string; structure?: unknown }): Promise<ProjectAnalysis> {
     // Считаем файлы в проекте
     const allFiles = this.countProjectFiles(project.structure as { children?: unknown[] });
 

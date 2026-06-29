@@ -2,37 +2,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { FileSystemService, FileTree } from './FileSystemService';
 import { ProjectError } from '../utils/errors';
+import { IProjectManager, ProjectInfo } from '../interfaces/IProjectManager';
 import { logger } from '../utils/logger';
-
-/**
- * Информация о текущем проекте.
- */
-export interface ProjectInfo {
-  /**
-   * Название проекта (имя корневой директории).
-   */
-  name: string;
-
-  /**
-   * Абсолютный путь к корню проекта.
-   */
-  path: string;
-
-  /**
-   * Абсолютный путь к служебной директории .devil/.
-   */
-  devilPath: string;
-
-  /**
-   * Количество файлов в проекте (без учёта исключённых).
-   */
-  fileCount: number;
-
-  /**
-   * Дерево файлов проекта.
-   */
-  structure: FileTree;
-}
 
 /**
  * Событие изменения файла.
@@ -64,7 +35,7 @@ export interface FileChangeEvent {
  * });
  * ```
  */
-export class ProjectManager {
+export class ProjectManager implements IProjectManager {
   private currentProject: ProjectInfo | null = null;
   private fileWatcher: vscode.FileSystemWatcher | null = null;
   private changeListeners: Array<(event: FileChangeEvent) => void> = [];
@@ -162,7 +133,7 @@ export class ProjectManager {
    * @returns FileTree или null, если проект не открыт
    */
   getProjectStructure(): FileTree | null {
-    return this.currentProject?.structure || null;
+    return (this.currentProject?.structure as FileTree) || null;
   }
 
   /**

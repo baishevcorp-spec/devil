@@ -70,8 +70,8 @@ export class SearchIndex implements ISearchIndex {
     logger.info('Начало построения индекса из дерева: ' + files.length + ' файлов', 'SearchIndex');
     const startTime = Date.now();
 
-    // Параллельная индексация с batch размером 20 файлов
-    const batchSize = 20;
+    // Параллельная индексация с batch размером 50 файлов (аудит 2026-06-29)
+    const batchSize = 50;
     let indexedCount = 0;
     
     for (let i = 0; i < files.length; i += batchSize) {
@@ -97,7 +97,7 @@ export class SearchIndex implements ISearchIndex {
     logger.info('Индекс построен за ' + duration + 'мс (файлов: ' + indexedCount + ')', 'SearchIndex');
   }
 
-    async buildIndex(): Promise<void> {
+  async buildIndex(): Promise<void> {
     if (!this.index) {
       throw new Error('SearchIndex не инициализирован');
     }
@@ -108,8 +108,8 @@ export class SearchIndex implements ISearchIndex {
     const files = await this.scanProjectFiles();
     logger.info('Найдено файлов для индексации: ' + files.length, 'SearchIndex');
 
-    // Параллельная индексация с batch размером 20 файлов
-    const batchSize = 20;
+    // Параллельная индексация с batch размером 50 файлов (аудит 2026-06-29)
+    const batchSize = 50;
     let indexedCount = 0;
     
     for (let i = 0; i < files.length; i += batchSize) {
@@ -168,7 +168,11 @@ export class SearchIndex implements ISearchIndex {
       }
 
       this.indexedFiles.set(relativePath, docIds);
-      logger.debug('Файл добавлен в индекс: ' + relativePath + ' (' + docIds.length + ' строк)', 'SearchIndex');
+      
+      // Логируем каждые 100 файлов, а не каждую строку (аудит 2026-06-29)
+      if (this.fileContents.size % 100 === 0) {
+        logger.debug('Файлов проиндексировано: ' + this.fileContents.size, 'SearchIndex');
+      }
     } catch (error) {
       logger.error('Ошибка добавления файла в индекс: ' + filePath, error, 'SearchIndex');
     }
