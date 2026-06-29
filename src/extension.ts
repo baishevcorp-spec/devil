@@ -3,7 +3,6 @@ import * as path from 'path';
 import { ConfigManager } from './services/ConfigManager';
 import { FileSystemService } from './services/FileSystemService';
 import { ProjectManager } from './services/ProjectManager';
-import { IProjectManager } from './interfaces/IProjectManager';
 import { LLMProvider } from './services/LLMProvider';
 import { ContextBuilder } from './services/ContextBuilder';
 import { MemoryStore } from './services/MemoryStore';
@@ -12,12 +11,13 @@ import { SearchIndex } from './services/SearchIndex';
 import { GraphBuilder } from './services/GraphBuilder';
 import { HistoryManager } from './services/HistoryManager';
 import { UserProfileManager } from './services/UserProfileManager';
+import { MultiModelManager } from './services/MultiModelManager';
 import { ChatPanel } from './panels/ChatPanel';
 import { logger } from './utils/logger';
 
 let configManager: ConfigManager;
 let fileSystemService: FileSystemService;
-let projectManager: IProjectManager;
+let projectManager: ProjectManager;
 let llmProvider: LLMProvider;
 let contextBuilder: ContextBuilder;
 let memoryStore: MemoryStore;
@@ -26,6 +26,7 @@ let searchIndex: SearchIndex;
 let graphBuilder: GraphBuilder;
 let historyManager: HistoryManager;
 let userProfileManager: UserProfileManager;
+let multiModelManager: MultiModelManager;
 
 export function activate(context: vscode.ExtensionContext): void {
   logger.info('Devil extension is activating...', 'Extension');
@@ -43,6 +44,7 @@ export function activate(context: vscode.ExtensionContext): void {
     graphBuilder = new GraphBuilder(fileSystemService, memoryStore);
     historyManager = new HistoryManager(memoryStore);
     userProfileManager = new UserProfileManager(memoryStore);
+    multiModelManager = new MultiModelManager(configManager);
 
     contextBuilder = new ContextBuilder(
       projectManager,
@@ -66,7 +68,8 @@ export function activate(context: vscode.ExtensionContext): void {
         gitService,
         historyManager,
         searchIndex,
-        graphBuilder
+        graphBuilder,
+        multiModelManager
       );
     });
 
@@ -97,12 +100,12 @@ export function activate(context: vscode.ExtensionContext): void {
           if (projectTree) {
             const files = fileSystemService.collectFiles(projectTree, folder.uri.fsPath);
             logger.info('Запуск индексации: ' + files.length + ' файлов', 'Extension');
-            
+
             // Индексируем код для быстрого поиска
             searchIndex.buildIndexFromTree(files).catch(err =>
               logger.error('Ошибка индексации', err, 'Extension')
             );
-            
+
             // Строим графовую память
             graphBuilder.parseProject(folder.uri.fsPath, files).catch(err =>
               logger.error('Ошибка построения графа', err, 'Extension')
@@ -194,7 +197,8 @@ export function activate(context: vscode.ExtensionContext): void {
           gitService,
           historyManager,
           searchIndex,
-          graphBuilder
+          graphBuilder,
+          multiModelManager
         );
 
         const filePath = editor.document.fileName;

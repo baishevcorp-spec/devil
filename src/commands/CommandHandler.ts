@@ -8,6 +8,7 @@ import { IMemoryStore } from '../interfaces/IMemoryStore';
 import { GitService } from '../services/GitService';
 import { SearchIndex } from '../services/SearchIndex';
 import { GraphBuilder } from '../services/GraphBuilder';
+import { IMultiModelManager } from '../interfaces/IMultiModelManager';
 import * as child_process from 'child_process';
 import * as util from 'util';
 import * as path from 'path';
@@ -42,7 +43,8 @@ export class CommandHandler {
     private readonly memoryStore: IMemoryStore,
     private readonly gitService: GitService,
     private readonly searchIndex: SearchIndex,
-    private readonly graphBuilder?: GraphBuilder
+    private readonly graphBuilder?: GraphBuilder,
+    private readonly multiModelManager?: IMultiModelManager
   ) {
     logger.info('CommandHandler инициализирован', 'CommandHandler');
   }
@@ -122,6 +124,8 @@ export class CommandHandler {
         return await this.handleMemory(args);
       case '/rebuild':
         return await this.handleRebuild([]);
+      case '/model':
+        return await this.handleModel(args);
       case '/view':
         return await this.handleView(args);
       case '/lint':
@@ -1068,6 +1072,123 @@ ${context.systemPrompt || 'Нет дополнительного контекс�
     }
   }
 
+  /**
+   * Обработка команды /model — управление моделями LLM.
+   *
+   * Синтаксис:
+   *   /model switch              — показать список моделей
+   *   /model switch <id>         — переключиться на модель
+   *   /model current             — показать текущую активную модель
+   */
+  private async handleModel(args: string[]): Promise<CommandResult> {
+    if (!this.multiModelManager) {
+      return {
+        success: false,
+        message: '❌ MultiModelManager не инициализирован. Обратитесь к администратору.',
+        data: {}
+      };
+    }
+
+    const subCommand = args[0];
+
+    // /model switch — показать список моделей или переключиться
+    if (subCommand === 'switch') {
+      const modelId = args[1];
+
+      if (!modelId) {
+        // Показать список моделей
+        const models = this.multiModelManager.getAvailableModels();
+        const currentId = this.multiModelManager.getCurrentModelId();
+
+        if (models.length === 0) {
+          return {
+            success: false,
+            message: '❌ Нет настроенных моделей. Добавьте модели в settings.json (devil.models).',
+            data: { models: [] }
+          };
+        }
+
+        let message = '## Доступные модели LLM\n\n';
+        message += '| ID | Название | Модель | Задачи | Статус |\n';
+        message += '|----|----------|--------|--------|--------|\n';
+
+        for (const model of models) {
+          const isActive = model.id === currentId;
+          const status = isActive ? '✅ активна' : '';
+          const tasks = model.taskTypes.join(', ');
+          message += `| \`${model.id}\` | ${model.name} | \`${model.model}\` | ${tasks} | ${status} |\n`;
+        }
+
+        message += '\n\n**Использование:** `/model switch <id>` для переключения.';
+
+        return {
+          success: true,
+          message,
+          data: { models, currentId }
+        };
+      }
+
+      // Переключиться на указанную модель
+      try {
+        this.multiModelManager.switchModel(modelId);
+        const currentModel = this.multiModelManager.getCurrentModel();
+
+        // Применяем конфигурацию к LLMProvider
+        if (currentModel && this.llmProvider) {
+          this.llmProvider.applyModelConfig(currentModel);
+        }
+
+        return {
+          success: true,
+          message: `✅ Модель переключена на **${currentModel?.name}** (\`${currentModel?.model}\`).`,
+          data: { switchedTo: modelId, model: currentModel }
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          success: false,
+          message: `❌ Ошибка переключения модели: ${errorMessage}`,
+          data: {}
+        };
+      }
+    }
+
+    // /model current — показать текущую активную модель
+    if (subCommand === 'current') {
+      const currentModel = this.multiModelManager.getCurrentModel();
+
+      if (!currentModel) {
+        return {
+          success: false,
+          message: '❌ Нет активной модели.',
+          data: {}
+        };
+      }
+
+      let message = '## Текущая активная модель\n\n';
+      message += `- **ID:** \`${currentModel.id}\`\n`;
+      message += `- **Название:** ${currentModel.name}\n`;
+      message += `- **Модель API:** \`${currentModel.model}\`\n`;
+      message += `- **Base URL:** \`${currentModel.baseUrl}\`\n`;
+      message += `- **Типы задач:** ${currentModel.taskTypes.join(', ')}\n`;
+
+      return {
+        success: true,
+        message,
+        data: { currentModel }
+      };
+    }
+
+    // Неизвестная подкоманда — показать подсказку
+    return {
+      success: false,
+      message: '## Использование команды /model\n\n' +
+        '- `/model switch` — показать список моделей\n' +
+        '- `/model switch <id>` — переключиться на модель\n' +
+        '- `/model current` — показать текущую активную модель\n',
+      data: {}
+    };
+  }
 
   private async handleRebuild(_args: string[]): Promise<CommandResult> {
     const project = this.projectManager.getCurrentProject();
@@ -1098,7 +1219,7 @@ ${context.systemPrompt || 'Нет дополнительного контекс�
           const files = this.fileSystemService.collectFiles(projectTree, project.path);
           logger.info('Автоматический запуск парсинга графа: ' + files.length + ' файлов', 'CommandHandler');
           await this.graphBuilder.parseProject(project.path, files);
-          
+
           return {
             success: true,
             message: '✅ Графовая память очищена (' + deletedNodes + ' узлов удалено).\n\n' +
@@ -1108,7 +1229,7 @@ ${context.systemPrompt || 'Нет дополнительного контекс�
           };
         }
       }
-      
+
       // Автоматически запускаем парсинг графа, если graphBuilder доступен
       if (this.graphBuilder) {
         const projectTree = this.projectManager.getProjectStructure();
@@ -1116,7 +1237,7 @@ ${context.systemPrompt || 'Нет дополнительного контекс�
           const files = this.fileSystemService.collectFiles(projectTree, project.path);
           logger.info('Автоматический запуск парсинга графа: ' + files.length + ' файлов', 'CommandHandler');
           await this.graphBuilder.parseProject(project.path, files);
-          
+
           return {
             success: true,
             message: '✅ Графовая память очищена (' + deletedNodes + ' узлов удалено).\n\n' +
@@ -1126,7 +1247,7 @@ ${context.systemPrompt || 'Нет дополнительного контекс�
           };
         }
       }
-      
+
       return {
         success: true,
         message: '✅ Графовая память очищена (' + deletedNodes + ' узлов удалено).\n\n' +
@@ -1167,6 +1288,11 @@ ${context.systemPrompt || 'Нет дополнительного контекс�
       '**Планирование:**',
       '- `/roadmap generate` — сгенерировать план проекта',
       '- `/checklist generate` — сгенерировать чек-лист файлов',
+      '',
+      '**Выбор модели LLM:**',
+      '- `/model switch` — показать список моделей',
+      '- `/model switch <id>` — переключиться на модель',
+      '- `/model current` — показать текущую активную модель',
       '',
       '**Другое:**',
       '- `/help` — показать этот список',

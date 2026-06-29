@@ -8,6 +8,7 @@ import { MemoryStore } from '../services/MemoryStore';
 import { GitService } from '../services/GitService';
 import { SearchIndex } from '../services/SearchIndex';
 import { GraphBuilder } from '../services/GraphBuilder';
+import { IMultiModelManager } from '../interfaces/IMultiModelManager';
 import { HistoryManager } from '../services/HistoryManager';
 import { CommandHandler } from '../commands/CommandHandler';
 
@@ -42,6 +43,7 @@ export class ChatPanel {
   private readonly searchIndex: SearchIndex;
   private readonly historyManager: HistoryManager;
   private readonly commandHandler: CommandHandler;
+  private readonly multiModelManager?: IMultiModelManager;
 
   public static createOrShow(
     extensionUri: vscode.Uri,
@@ -53,7 +55,8 @@ export class ChatPanel {
     gitService: GitService,
     historyManager: HistoryManager,
     searchIndex: SearchIndex,
-    graphBuilder?: GraphBuilder
+    graphBuilder?: GraphBuilder,
+    _multiModelManager?: IMultiModelManager
   ): ChatPanel {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
@@ -105,7 +108,8 @@ export class ChatPanel {
     gitService: GitService,
     historyManager: HistoryManager,
     searchIndex: SearchIndex,
-    graphBuilder?: GraphBuilder
+    graphBuilder?: GraphBuilder,
+    multiModelManager?: IMultiModelManager
   ) {
     this._panel = panel;
     this._extensionUri = extensionUri;
@@ -117,6 +121,7 @@ export class ChatPanel {
     this.gitService = gitService;
     this.searchIndex = searchIndex;
     this.historyManager = historyManager;
+    this.multiModelManager = multiModelManager;
     this.commandHandler = new CommandHandler(
       fileSystemService,
       llmProvider,
@@ -125,7 +130,8 @@ export class ChatPanel {
       memoryStore,
       gitService,
       this.searchIndex,
-      graphBuilder
+      graphBuilder,
+      multiModelManager
     );
 
     this._initializeHistory();
