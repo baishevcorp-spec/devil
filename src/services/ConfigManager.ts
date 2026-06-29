@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ConfigError } from '../utils/errors';
 import { logger } from '../utils/logger';
+import { ModelConfig } from '../interfaces/IMultiModelManager';
 
 /**
  * Конфигурация расширения Devil.
@@ -10,6 +11,7 @@ export interface DevilConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
+  models?: ModelConfig[]; // Список конфигураций моделей для MultiModelManager
   maxRetries: number;
   cacheTtlSeconds: number;
   defaultSystemPrompt: string;
@@ -97,6 +99,19 @@ export class ConfigManager {
 
   getApiKey(): string {
     return this.getConfig().apiKey;
+  }
+
+  /**
+   * Получить список всех настроенных моделей из settings.json.
+   * Формат в settings.json: "devil.models": [{ "id": "fast", "name": "...", ... }]
+   */
+  getModels(): ModelConfig[] {
+    const config = this.getConfig();
+    const models = config.models;
+    if (!models || !Array.isArray(models)) {
+      return [];
+    }
+    return models as ModelConfig[];
   }
 
   getModel(): string {
