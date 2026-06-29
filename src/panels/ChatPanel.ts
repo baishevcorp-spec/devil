@@ -56,7 +56,7 @@ export class ChatPanel {
     historyManager: HistoryManager,
     searchIndex: SearchIndex,
     graphBuilder?: GraphBuilder,
-    _multiModelManager?: IMultiModelManager
+    multiModelManager?: IMultiModelManager
   ): ChatPanel {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
@@ -92,7 +92,8 @@ export class ChatPanel {
       gitService,
       historyManager,
       searchIndex,
-      graphBuilder
+      graphBuilder,
+      multiModelManager
     );
     return ChatPanel.currentPanel;
   }
