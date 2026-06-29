@@ -72,8 +72,13 @@ export class GraphBuilder {
         for (const node of parsedNodes) {
           // Проверяем, есть ли уже узел с таким именем в этом файле
           let nodeId: string;
-          const existingNodes = await this.memoryStore.findNodes({ name: node.name, path: relativePath });
-          const existingNode = existingNodes.find(n => n.type === node.type);
+          // Используем type в запросе для точного поиска (исключаем узлы файлов)
+          const existingNodes = await this.memoryStore.findNodes({ 
+            type: node.type, 
+            name: node.name, 
+            path: relativePath 
+          });
+          const existingNode = existingNodes.length > 0 ? existingNodes[0] : undefined;
           
           if (existingNode) {
             // Узел уже есть — обновляем метаданные

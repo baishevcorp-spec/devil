@@ -7,6 +7,7 @@ import { FileSystemService } from '../services/FileSystemService';
 import { MemoryStore } from '../services/MemoryStore';
 import { GitService } from '../services/GitService';
 import { SearchIndex } from '../services/SearchIndex';
+import { GraphBuilder } from '../services/GraphBuilder';
 import { HistoryManager } from '../services/HistoryManager';
 import { CommandHandler } from '../commands/CommandHandler';
 
@@ -51,7 +52,8 @@ export class ChatPanel {
     memoryStore: MemoryStore,
     gitService: GitService,
     historyManager: HistoryManager,
-    searchIndex: SearchIndex
+    searchIndex: SearchIndex,
+    graphBuilder?: GraphBuilder
   ): ChatPanel {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
@@ -86,7 +88,8 @@ export class ChatPanel {
       memoryStore,
       gitService,
       historyManager,
-      searchIndex
+      searchIndex,
+      graphBuilder
     );
     return ChatPanel.currentPanel;
   }
@@ -101,7 +104,8 @@ export class ChatPanel {
     memoryStore: MemoryStore,
     gitService: GitService,
     historyManager: HistoryManager,
-    searchIndex: SearchIndex
+    searchIndex: SearchIndex,
+    graphBuilder?: GraphBuilder
   ) {
     this._panel = panel;
     this._extensionUri = extensionUri;
@@ -120,7 +124,8 @@ export class ChatPanel {
       projectManager,
       memoryStore,
       gitService,
-      this.searchIndex
+      this.searchIndex,
+      graphBuilder
     );
 
     this._initializeHistory();

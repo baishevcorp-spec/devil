@@ -58,7 +58,46 @@ export class SearchIndex implements ISearchIndex {
     logger.info('SearchIndex инициализирован для проекта: ' + projectPath, 'SearchIndex');
   }
 
-  async buildIndex(): Promise<void> {
+  /**
+   * Строит индекс из уже просканированного дерева файлов (оптимизация).
+   * Избегает двойного сканирования ФС.
+   */
+  async buildIndexFromTree(files: string[]): Promise<void> {
+    if (!this.index) {
+      throw new Error('SearchIndex не инициализирован');
+    }
+
+    logger.info('Начало построения индекса из дерева: ' + files.length + ' файлов', 'SearchIndex');
+    const startTime = Date.now();
+
+    // Параллельная индексация с batch размером 20 файлов
+    const batchSize = 20;
+    let indexedCount = 0;
+    
+    for (let i = 0; i < files.length; i += batchSize) {
+      const batch = files.slice(i, i + batchSize);
+      const results = await Promise.allSettled(
+        batch.map(filePath => this.addToIndex(filePath))
+      );
+      
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          indexedCount++;
+        } else {
+          logger.warn('Не удалось проиндексировать файл', 'SearchIndex');
+        }
+      }
+      
+      if (indexedCount % 100 === 0 || i + batchSize >= files.length) {
+        logger.info('Проиндексировано файлов: ' + indexedCount + '/' + files.length, 'SearchIndex');
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    logger.info('Индекс построен за ' + duration + 'мс (файлов: ' + indexedCount + ')', 'SearchIndex');
+  }
+
+    async buildIndex(): Promise<void> {
     if (!this.index) {
       throw new Error('SearchIndex не инициализирован');
     }
@@ -69,17 +108,27 @@ export class SearchIndex implements ISearchIndex {
     const files = await this.scanProjectFiles();
     logger.info('Найдено файлов для индексации: ' + files.length, 'SearchIndex');
 
+    // Параллельная индексация с batch размером 20 файлов
+    const batchSize = 20;
     let indexedCount = 0;
-    for (const filePath of files) {
-      try {
-        await this.addToIndex(filePath);
-        indexedCount++;
-
-        if (indexedCount % 100 === 0) {
-          logger.info('Проиндексировано файлов: ' + indexedCount + '/' + files.length, 'SearchIndex');
+    
+    for (let i = 0; i < files.length; i += batchSize) {
+      const batch = files.slice(i, i + batchSize);
+      const results = await Promise.allSettled(
+        batch.map(filePath => this.addToIndex(filePath))
+      );
+      
+      // Считаем успешные индексации
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          indexedCount++;
+        } else {
+          logger.warn('Не удалось проиндексировать файл: ' + result.reason, 'SearchIndex');
         }
-      } catch (error) {
-        logger.warn('Не удалось проиндексировать файл: ' + filePath, 'SearchIndex');
+      }
+      
+      if (indexedCount % 100 === 0 || i + batchSize >= files.length) {
+        logger.info('Проиндексировано файлов: ' + indexedCount + '/' + files.length, 'SearchIndex');
       }
     }
 
@@ -224,12 +273,19 @@ export class SearchIndex implements ISearchIndex {
   }
 
   async clear(): Promise<void> {
-    if (this.index) {
-      this.index = null;
-    }
+    // Пересоздаём индекс вместо обнуления, чтобы buildIndex() мог работать
+    this.index = new FlexSearch.Document({
+      document: {
+        id: 'id',
+        index: ['content', 'filePath'],
+        store: ['filePath', 'line', 'column', 'content']
+      },
+      tokenize: 'forward',
+      cache: 100,
+    });
     this.indexedFiles.clear();
     this.fileContents.clear();
-    logger.info('Индекс очищен', 'SearchIndex');
+    logger.info('Индекс очищен и пересоздан', 'SearchIndex');
   }
 
   private async scanProjectFiles(): Promise<string[]> {

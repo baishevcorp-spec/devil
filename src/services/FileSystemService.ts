@@ -32,7 +32,6 @@ export class FileSystemService {
   async readFile(filePath: string): Promise<string> {
     try {
       const content = await fs.readFile(filePath, 'utf-8');
-      logger.debug('Файл прочитан: ' + filePath, undefined, 'FileSystemService');
       return content;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
