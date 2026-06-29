@@ -36,10 +36,13 @@ describe('CommandHandler Integration Tests', () => {
     projectManager = new ProjectManager(fsService);
     memoryStore = new MemoryStore();
     gitService = new GitService();
+
+    // ИСПРАВЛЕНО: СНАЧАЛА создаём testDir
+    testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'devil-cmd-test-'));
+
+    // ПОТОМ инициализируем сервисы с testDir
     searchIndex = new SearchIndex(fsService);
     await searchIndex.initialize(testDir);
-
-    testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'devil-cmd-test-'));
 
     await memoryStore.initialize(testDir);
 
@@ -436,6 +439,41 @@ describe('CommandHandler Integration Tests', () => {
       const result = await commandHandler.handleMessage('Привет, как дела?');
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('/rebuild command', () => {
+    it('очищает графовую память и пересобирает индекс', async () => {
+      // Имитируем наличие узлов в памяти
+      await memoryStore.addNode({
+        type: 'file',
+        name: 'test.ts',
+        path: 'test.ts',
+        metadata: {},
+        tags: []
+      });
+
+      const nodesBefore = await memoryStore.findNodes({ limit: 100 });
+      expect(nodesBefore.length).toBeGreaterThan(0);
+
+      // Выполняем /rebuild
+      const result = await commandHandler.handleMessage('/rebuild');
+
+      expect(result).not.toBeNull();
+      expect(result!.success).toBe(true);
+      expect(result!.message).toContain('Графовая память очищена');
+
+      // Проверяем, что узлы удалены
+      const nodesAfter = await memoryStore.findNodes({ limit: 100 });
+      expect(nodesAfter.length).toBe(0);
+    });
+
+    it('возвращает успешный результат после очистки', async () => {
+      // Выполняем /rebuild
+      const result = await commandHandler.handleMessage('/rebuild');
+
+      expect(result).not.toBeNull();
+      expect(result!.success).toBe(true);
     });
   });
 });
