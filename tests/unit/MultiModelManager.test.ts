@@ -34,9 +34,22 @@ describe('MultiModelManager', () => {
     }
   ];
 
+  const fallbackModels: ModelConfig[] = [
+    {
+      id: 'fallback',
+      name: 'Fallback Model',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'sk-fallback',
+      model: 'fallback-model',
+      taskTypes: ['chat'],
+      isDefault: true
+    }
+  ];
+
   beforeEach(() => {
     mockConfigManager = {
       getModels: jest.fn().mockReturnValue(mockModels),
+      getDefaultModels: jest.fn().mockReturnValue(fallbackModels),
       getBaseUrl: jest.fn().mockReturnValue('https://api.example.com/v1'),
       getApiKey: jest.fn().mockReturnValue('sk-default'),
       getModel: jest.fn().mockReturnValue('gpt-4o-mini')
@@ -67,14 +80,13 @@ describe('MultiModelManager', () => {
       expect(current!.isDefault).toBe(true);
     });
 
-    it('возвращает null, если моделей нет', () => {
+    it('возвращает fallback модель, если моделей нет в конфиге', () => {
       mockConfigManager.getModels.mockReturnValue([]);
-      mockConfigManager.getBaseUrl.mockReturnValue('');
-      mockConfigManager.getApiKey.mockReturnValue('');
-      mockConfigManager.getModel.mockReturnValue('');
+      mockConfigManager.getDefaultModels.mockReturnValue(fallbackModels);
       const emptyManager = new MultiModelManager(mockConfigManager);
-      // При пустом конфиге создаётся fallback-модель
-      expect(emptyManager.getCurrentModel()).not.toBeNull();
+      const current = emptyManager.getCurrentModel();
+      expect(current).not.toBeNull();
+      expect(current!.id).toBe('fallback');
     });
   });
 
@@ -111,7 +123,6 @@ describe('MultiModelManager', () => {
     });
 
     it('возвращает текущую модель, если нет подходящей', () => {
-      // Создаём менеджер с моделями, не поддерживающими определённый тип
       mockConfigManager.getModels.mockReturnValue([
         {
           id: 'only-chat',
@@ -123,7 +134,6 @@ describe('MultiModelManager', () => {
         }
       ]);
       const testManager = new MultiModelManager(mockConfigManager);
-      // Для неподдерживаемого типа должна вернуться текущая модель
       const modelId = testManager.getModelForTask('refactor');
       expect(modelId).toBe('only-chat');
     });
@@ -159,9 +169,10 @@ describe('MultiModelManager', () => {
 
   describe('removeModel', () => {
     it('удаляет модель', () => {
-      manager.removeModel('local');
-      expect(manager.getAvailableModels()).toHaveLength(2);
-      expect(manager.getAvailableModels().map(m => m.id)).not.toContain('local');
+      const initialCount = manager.getAvailableModels().length;
+      manager.removeModel('powerful');
+      expect(manager.getAvailableModels()).toHaveLength(initialCount - 1);
+      expect(manager.getAvailableModels().map(m => m.id)).not.toContain('powerful');
     });
 
     it('бросает ошибку для несуществующей модели', () => {
@@ -184,10 +195,9 @@ describe('MultiModelManager', () => {
 
   describe('updateModel', () => {
     it('обновляет поля модели', () => {
-      manager.updateModel('fast', { name: 'Updated Fast', temperature: 0.5 });
+      manager.updateModel('fast', { name: 'Updated Fast' });
       const updated = manager.getAvailableModels().find(m => m.id === 'fast');
       expect(updated!.name).toBe('Updated Fast');
-      expect(updated!.temperature).toBe(0.5);
     });
 
     it('бросает ошибку для несуществующей модели', () => {

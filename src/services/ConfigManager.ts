@@ -114,6 +114,48 @@ export class ConfigManager {
     return models as ModelConfig[];
   }
 
+  /**
+   * Возвращает предустановленные модели для ProxyAPI (если в settings.json нет моделей).
+   */
+  getDefaultModels(): ModelConfig[] {
+    const apiKey = this.getApiKey();
+    return [
+      {
+        id: 'gpt-5.5',
+        name: 'GPT-5.5',
+        baseUrl: 'https://api.proxyapi.ru/openai/v1',
+        apiKey: apiKey,
+        model: 'gpt-5.5',
+        taskTypes: ['chat', 'explain', 'generate'],
+        isDefault: true
+      },
+      {
+        id: 'gpt-5.5-pro',
+        name: 'GPT-5.5 Pro',
+        baseUrl: 'https://api.proxyapi.ru/openai/v1',
+        apiKey: apiKey,
+        model: 'gpt-5.5-pro',
+        taskTypes: ['refactor', 'generate']
+      },
+      {
+        id: 'gpt-4o',
+        name: 'GPT-4o',
+        baseUrl: 'https://api.proxyapi.ru/openai/v1',
+        apiKey: apiKey,
+        model: 'gpt-4o',
+        taskTypes: ['chat', 'explain']
+      },
+      {
+        id: 'o4-mini',
+        name: 'o4-mini (рассуждающая)',
+        baseUrl: 'https://api.proxyapi.ru/openai/v1',
+        apiKey: apiKey,
+        model: 'o4-mini',
+        taskTypes: ['refactor', 'generate']
+      }
+    ];
+  }
+
   getModel(): string {
     return this.getConfig().model;
   }

@@ -92,6 +92,11 @@
         "command": "devil.explainSelection",
         "title": "Объяснить код с Devil",
         "category": "Devil"
+      },
+      {
+        "command": "devil.selectModel",
+        "title": "Devil: Выбрать модель",
+        "category": "Devil"
       }
     ],
     "configuration": {

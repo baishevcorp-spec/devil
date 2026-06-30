@@ -12,8 +12,10 @@ import { GraphBuilder } from './services/GraphBuilder';
 import { HistoryManager } from './services/HistoryManager';
 import { UserProfileManager } from './services/UserProfileManager';
 import { MultiModelManager } from './services/MultiModelManager';
+import { StatusBarManager } from './services/StatusBarManager';
 import { ChatPanel } from './panels/ChatPanel';
 import { logger } from './utils/logger';
+
 
 let configManager: ConfigManager;
 let fileSystemService: FileSystemService;
@@ -27,6 +29,7 @@ let graphBuilder: GraphBuilder;
 let historyManager: HistoryManager;
 let userProfileManager: UserProfileManager;
 let multiModelManager: MultiModelManager;
+let statusBarManager: StatusBarManager;
 
 export function activate(context: vscode.ExtensionContext): void {
   logger.info('Devil extension is activating...', 'Extension');
@@ -45,6 +48,8 @@ export function activate(context: vscode.ExtensionContext): void {
     historyManager = new HistoryManager(memoryStore);
     userProfileManager = new UserProfileManager(memoryStore);
     multiModelManager = new MultiModelManager(configManager);
+    // Инициализация StatusBarManager
+    statusBarManager = new StatusBarManager(multiModelManager, llmProvider);
 
     contextBuilder = new ContextBuilder(
       projectManager,
@@ -73,6 +78,13 @@ export function activate(context: vscode.ExtensionContext): void {
         configManager
       );
     });
+
+    // Команда выбора модели из StatusBar
+    const selectModelCommand = vscode.commands.registerCommand('devil.selectModel', () => {
+      statusBarManager.showModelPicker();
+    });
+    context.subscriptions.push(selectModelCommand);
+    context.subscriptions.push(statusBarManager);
 
     const openProjectCommand = vscode.commands.registerCommand('devil.openProject', async () => {
       const result = await vscode.window.showOpenDialog({
