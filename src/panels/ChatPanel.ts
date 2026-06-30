@@ -10,6 +10,7 @@ import { SearchIndex } from '../services/SearchIndex';
 import { GraphBuilder } from '../services/GraphBuilder';
 import { IMultiModelManager } from '../interfaces/IMultiModelManager';
 import { HistoryManager } from '../services/HistoryManager';
+import { ConfigManager } from '../services/ConfigManager';
 import { CommandHandler } from '../commands/CommandHandler';
 
 export interface WebviewMessage {
@@ -43,6 +44,7 @@ export class ChatPanel {
   private readonly searchIndex: SearchIndex;
   private readonly historyManager: HistoryManager;
   private readonly commandHandler: CommandHandler;
+  private readonly configManager: ConfigManager;
   private readonly multiModelManager?: IMultiModelManager;
 
   public static createOrShow(
@@ -56,7 +58,8 @@ export class ChatPanel {
     historyManager: HistoryManager,
     searchIndex: SearchIndex,
     graphBuilder?: GraphBuilder,
-    multiModelManager?: IMultiModelManager
+    multiModelManager?: IMultiModelManager,
+    configManager?: ConfigManager
   ): ChatPanel {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
@@ -93,8 +96,8 @@ export class ChatPanel {
       historyManager,
       searchIndex,
       graphBuilder,
-      multiModelManager
-    );
+      multiModelManager,
+      configManager || new ConfigManager()    );
     return ChatPanel.currentPanel;
   }
 
@@ -110,7 +113,8 @@ export class ChatPanel {
     historyManager: HistoryManager,
     searchIndex: SearchIndex,
     graphBuilder?: GraphBuilder,
-    multiModelManager?: IMultiModelManager
+    multiModelManager?: IMultiModelManager,
+    configManager?: ConfigManager
   ) {
     this._panel = panel;
     this._extensionUri = extensionUri;
@@ -122,6 +126,7 @@ export class ChatPanel {
     this.gitService = gitService;
     this.searchIndex = searchIndex;
     this.historyManager = historyManager;
+    this.configManager = configManager || new ConfigManager();
     this.multiModelManager = multiModelManager;
     this.commandHandler = new CommandHandler(
       fileSystemService,
@@ -210,6 +215,42 @@ export class ChatPanel {
         if (message.text) {
           vscode.window.showErrorMessage(message.text);
         }
+        break;
+      }
+      case 'openSettings': {
+        // Отправляем текущие настройки в Webview
+        const settings = {
+          baseUrl: this.configManager.getBaseUrl(),
+          apiKey: this.configManager.getApiKey(),
+          model: this.configManager.getModel(),
+          maxRetries: this.configManager.getMaxRetries(),
+          systemPrompt: this.configManager.getDefaultSystemPrompt(),
+          debugMode: this.configManager.isDebugMode()
+        };
+        this._panel.webview.postMessage({ type: 'loadSettings', settings });
+        break;
+      }
+      case 'saveSettings': {
+        // Сохраняем настройки
+        const newSettings = message.settings as {
+          baseUrl: string;
+          apiKey: string;
+          model: string;
+          maxRetries: number;
+          systemPrompt: string;
+          debugMode: boolean;
+        };
+        await this.configManager.updateBaseUrl(newSettings.baseUrl);
+        await this.configManager.updateApiKey(newSettings.apiKey);
+        await this.configManager.updateModel(newSettings.model);
+        await this.configManager.updateMaxRetries(newSettings.maxRetries);
+        await this.configManager.updateSystemPrompt(newSettings.systemPrompt);
+        await this.configManager.updateDebugMode(newSettings.debugMode);
+
+        this._panel.webview.postMessage({
+          type: 'agentResponse',
+          content: '✅ Настройки сохранены успешно.'
+        });
         break;
       }
     }
@@ -400,16 +441,10 @@ export class ChatPanel {
       '<head>' +
       '    <meta charset="UTF-8">' +
       '    <meta name="viewport" content="width=device-width, initial-scale=1.0">' +
-      '    <meta http-equiv="Content-Security-Policy" content="' +
-      csp +
-      '">' +
+      '    <meta http-equiv="Content-Security-Policy" content="' + csp + '">' +
       '    <title>Devil Chat</title>' +
-      '    <link rel="stylesheet" href="' +
-      styleUri +
-      '">' +
-      '    <link rel="stylesheet" href="' +
-      highlightStylesUri +
-      '">' +
+      '    <link rel="stylesheet" href="' + styleUri + '">' +
+      '    <link rel="stylesheet" href="' + highlightStylesUri + '">' +
       '</head>' +
       '<body>' +
       '    <div class="chat-container">' +
@@ -452,57 +487,69 @@ export class ChatPanel {
       '            </div>' +
       '        </div>' +
       '    </div>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      markedUri +
-      '"></script>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      highlightUri +
-      '"></script>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      highlightLangTypescript +
-      '"></script>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      highlightLangJavascript +
-      '"></script>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      highlightLangPython +
-      '"></script>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      highlightLangJson +
-      '"></script>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      highlightLangBash +
-      '"></script>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      highlightLangSql +
-      '"></script>' +
-      '    <script nonce="' +
-      nonce +
-      '" src="' +
-      scriptUri +
-      '"></script>' +
+      '' +
+      '    <!-- Settings Modal — ДОЛЖНА БЫТЬ ПЕРЕД СКРИПТАМИ -->' +
+      '    <div class="modal-overlay" id="settingsModal" style="display: none;">' +
+      '        <div class="modal">' +
+      '            <div class="modal-header">' +
+      '                <h2>⚙️ Настройки Devil</h2>' +
+      '                <button class="modal-close" id="closeSettingsModal">&times;</button>' +
+      '            </div>' +
+      '            <div class="modal-body">' +
+      '                <div class="settings-section">' +
+      '                    <h3>🌐 API настройки</h3>' +
+      '                    <div class="form-group">' +
+      '                        <label for="settingsBaseUrl">Base URL:</label>' +
+      '                        <input type="text" id="settingsBaseUrl" placeholder="https://api.openai.com/v1">' +
+      '                    </div>' +
+      '                    <div class="form-group">' +
+      '                        <label for="settingsApiKey">API Key:</label>' +
+      '                        <input type="password" id="settingsApiKey" placeholder="sk-...">' +
+      '                    </div>' +
+      '                    <div class="form-group">' +
+      '                        <label for="settingsModel">Модель по умолчанию:</label>' +
+      '                        <input type="text" id="settingsModel" placeholder="gpt-4o-mini">' +
+      '                    </div>' +
+      '                    <div class="form-group">' +
+      '                        <label for="settingsMaxRetries">Максимум попыток:</label>' +
+      '                        <input type="number" id="settingsMaxRetries" min="1" max="10" value="3">' +
+      '                    </div>' +
+      '                </div>' +
+      '                <div class="settings-section">' +
+      '                    <h3>📝 Системный промпт</h3>' +
+      '                    <div class="form-group">' +
+      '                        <textarea id="settingsSystemPrompt" rows="5" placeholder="Ты — Devil, интеллектуальный ассистент..."></textarea>' +
+      '                    </div>' +
+      '                </div>' +
+      '                <div class="settings-section">' +
+      '                    <h3>🔧 Отладка</h3>' +
+      '                    <div class="form-group checkbox-group">' +
+      '                        <input type="checkbox" id="settingsDebugMode">' +
+      '                        <label for="settingsDebugMode">Включить режим отладки</label>' +
+      '                    </div>' +
+      '                </div>' +
+      '            </div>' +
+      '            <div class="modal-footer">' +
+      '                <button class="btn btn-secondary" id="cancelSettings">Отмена</button>' +
+      '                <button class="btn btn-primary" id="saveSettings">Сохранить</button>' +
+      '            </div>' +
+      '        </div>' +
+      '    </div>' +
+      '' +
+      '    <script nonce="' + nonce + '" src="' + markedUri + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightUri + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangTypescript + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangJavascript + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangPython + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangJson + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangBash + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + highlightLangSql + '"></script>' +
+      '    <script nonce="' + nonce + '" src="' + scriptUri + '"></script>' +
       '</body>' +
       '</html>'
     );
   }
 }
-
 function getNonce(): string {
   let text = '';
   const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';

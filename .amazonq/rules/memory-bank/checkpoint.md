@@ -776,3 +776,15 @@ BCK-22 /test generate — генерация юнит-тестов
 Добавить примеры использования в README
 Оптимизировать оставшиеся узкие места
 Рекомендация: Вариант A (BCK-23), так как это последний Must Have для v1.0.0.
+
+
+User → Webview (клик "⚙ Настройки")
+     → Модалка открывается
+     → Форма: модели, baseUrl, apiKey, systemPrompt
+     → User сохраняет
+     → Webview (postMessage: { type: 'saveSettings', models: [...] })
+     → Extension (ChatPanel → CommandHandler → ConfigManager)
+     → ConfigManager.updateModels(models)
+     → settings.json обновляется
+     → MultiModelManager перезагружает модели
+     → Webview (postMessage: { type: 'settingsSaved', success: true })

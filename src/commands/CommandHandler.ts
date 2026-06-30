@@ -1212,41 +1212,7 @@ ${context.systemPrompt || 'Нет дополнительного контекс�
       await this.searchIndex.clear();
       await this.searchIndex.buildIndex();
 
-      // Автоматически запускаем парсинг графа, если graphBuilder доступен
-      if (this.graphBuilder) {
-        const projectTree = this.projectManager.getProjectStructure();
-        if (projectTree) {
-          const files = this.fileSystemService.collectFiles(projectTree, project.path);
-          logger.info('Автоматический запуск парсинга графа: ' + files.length + ' файлов', 'CommandHandler');
-          await this.graphBuilder.parseProject(project.path, files);
 
-          return {
-            success: true,
-            message: '✅ Графовая память очищена (' + deletedNodes + ' узлов удалено).\n\n' +
-              'Индекс поиска перестроен.\n' +
-              'Граф перестроен автоматически: ' + files.length + ' файлов обработано.',
-            data: { deletedNodes, rebuiltFiles: files.length }
-          };
-        }
-      }
-
-      // Автоматически запускаем парсинг графа, если graphBuilder доступен
-      if (this.graphBuilder) {
-        const projectTree = this.projectManager.getProjectStructure();
-        if (projectTree) {
-          const files = this.fileSystemService.collectFiles(projectTree, project.path);
-          logger.info('Автоматический запуск парсинга графа: ' + files.length + ' файлов', 'CommandHandler');
-          await this.graphBuilder.parseProject(project.path, files);
-
-          return {
-            success: true,
-            message: '✅ Графовая память очищена (' + deletedNodes + ' узлов удалено).\n\n' +
-              'Индекс поиска перестроен.\n' +
-              'Граф перестроен автоматически: ' + files.length + ' файлов обработано.',
-            data: { deletedNodes, rebuiltFiles: files.length }
-          };
-        }
-      }
 
       return {
         success: true,

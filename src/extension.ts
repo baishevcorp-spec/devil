@@ -69,7 +69,8 @@ export function activate(context: vscode.ExtensionContext): void {
         historyManager,
         searchIndex,
         graphBuilder,
-        multiModelManager
+        multiModelManager,
+        configManager
       );
     });
 
@@ -198,7 +199,8 @@ export function activate(context: vscode.ExtensionContext): void {
           historyManager,
           searchIndex,
           graphBuilder,
-          multiModelManager
+          multiModelManager,
+          configManager
         );
 
         const filePath = editor.document.fileName;

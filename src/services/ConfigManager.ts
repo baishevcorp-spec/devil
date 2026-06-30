@@ -36,18 +36,18 @@ const DEFAULT_CONFIG: DevilConfig = {
 
 /**
  * ConfigManager — единая точка доступа к настройкам расширения.
- * 
+ *
  * Отвечает за:
  * - Чтение настроек из `vscode.workspace.getConfiguration('devil')`
  * - Подписку на изменения настроек (onConfigChanged)
  * - Валидацию конфигурации
  * - Предоставление значений по умолчанию
- * 
+ *
  * @example
  * ```typescript
  * const config = new ConfigManager();
  * config.initialize();
- * 
+ *
  * const url = config.getBaseUrl();
  * config.onConfigChanged(() => {
  *   console.log('Настройки изменились!');
@@ -218,4 +218,41 @@ export class ConfigManager {
     this.changeListeners = [];
     logger.info('ConfigManager остановлен', 'ConfigManager');
   }
+
+  async updateBaseUrl(url: string): Promise<void> {
+    const config = vscode.workspace.getConfiguration('devil');
+    await config.update('baseUrl', url, vscode.ConfigurationTarget.Global);
+  }
+
+  async updateApiKey(key: string): Promise<void> {
+    const config = vscode.workspace.getConfiguration('devil');
+    await config.update('apiKey', key, vscode.ConfigurationTarget.Global);
+  }
+
+  async updateModel(model: string): Promise<void> {
+    const config = vscode.workspace.getConfiguration('devil');
+    await config.update('model', model, vscode.ConfigurationTarget.Global);
+  }
+
+  async updateMaxRetries(retries: number): Promise<void> {
+    const config = vscode.workspace.getConfiguration('devil');
+    await config.update('maxRetries', retries, vscode.ConfigurationTarget.Global);
+  }
+
+  async updateSystemPrompt(prompt: string): Promise<void> {
+    const config = vscode.workspace.getConfiguration('devil');
+    await config.update('defaultSystemPrompt', prompt, vscode.ConfigurationTarget.Global);
+  }
+
+  async updateDebugMode(enabled: boolean): Promise<void> {
+    const config = vscode.workspace.getConfiguration('devil');
+    await config.update('debugMode', enabled, vscode.ConfigurationTarget.Global);
+  }
+
+  isDebugMode(): boolean {
+    const cfg = vscode.workspace.getConfiguration('devil');
+    return cfg.get<boolean>('debugMode', false);
+  }
 }
+
+
