@@ -120,38 +120,77 @@ export class ConfigManager {
   getDefaultModels(): ModelConfig[] {
     const apiKey = this.getApiKey();
     return [
+      // Простые модели (для чата, объяснений)
       {
-        id: 'gpt-5.5',
-        name: 'GPT-5.5',
+        id: 'gpt-4o-mini',
+        name: 'GPT-4o Mini (быстрая)',
         baseUrl: 'https://api.proxyapi.ru/openai/v1',
         apiKey: apiKey,
-        model: 'gpt-5.5',
-        taskTypes: ['chat', 'explain', 'generate'],
-        isDefault: true
-      },
-      {
-        id: 'gpt-5.5-pro',
-        name: 'GPT-5.5 Pro',
-        baseUrl: 'https://api.proxyapi.ru/openai/v1',
-        apiKey: apiKey,
-        model: 'gpt-5.5-pro',
-        taskTypes: ['refactor', 'generate']
+        model: 'gpt-4o-mini',
+        taskTypes: ['chat', 'explain'],
+        isDefault: false
       },
       {
         id: 'gpt-4o',
-        name: 'GPT-4o',
+        name: 'GPT-4o (стандарт)',
         baseUrl: 'https://api.proxyapi.ru/openai/v1',
         apiKey: apiKey,
         model: 'gpt-4o',
-        taskTypes: ['chat', 'explain']
+        taskTypes: ['chat', 'explain', 'generate'],
+        isDefault: true
       },
+      
+      // Средние модели (для генерации кода)
+      {
+        id: 'gpt-5.5',
+        name: 'GPT-5.5 (новая)',
+        baseUrl: 'https://api.proxyapi.ru/openai/v1',
+        apiKey: apiKey,
+        model: 'gpt-5.5',
+        taskTypes: ['chat', 'explain', 'generate', 'refactor'],
+        isDefault: false
+      },
+      
+      // Профессиональные модели (для сложного кода, рефакторинга)
+      {
+        id: 'gpt-5.5-pro',
+        name: 'GPT-5.5 Pro (профессиональная)',
+        baseUrl: 'https://api.proxyapi.ru/openai/v1',
+        apiKey: apiKey,
+        model: 'gpt-5.5-pro',
+        taskTypes: ['refactor', 'generate'],
+        isDefault: false
+      },
+      
+      // Рассуждающие модели (для сложной логики)
       {
         id: 'o4-mini',
         name: 'o4-mini (рассуждающая)',
         baseUrl: 'https://api.proxyapi.ru/openai/v1',
         apiKey: apiKey,
         model: 'o4-mini',
-        taskTypes: ['refactor', 'generate']
+        taskTypes: ['refactor', 'generate'],
+        isDefault: false
+      },
+      
+      // Альтернативные провайдеры
+      {
+        id: 'claude-sonnet-4',
+        name: 'Claude Sonnet 4 (Anthropic)',
+        baseUrl: 'https://api.proxyapi.ru/openai/v1',
+        apiKey: apiKey,
+        model: 'anthropic/claude-sonnet-4-20250514',
+        taskTypes: ['chat', 'explain', 'generate', 'refactor'],
+        isDefault: false
+      },
+      {
+        id: 'gemini-2.0-flash',
+        name: 'Gemini 2.0 Flash (Google)',
+        baseUrl: 'https://api.proxyapi.ru/openai/v1',
+        apiKey: apiKey,
+        model: 'gemini/gemini-2.0-flash',
+        taskTypes: ['chat', 'explain'],
+        isDefault: false
       }
     ];
   }

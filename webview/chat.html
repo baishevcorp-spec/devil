@@ -170,6 +170,21 @@
                 <button class="modal-close" id="closeSettingsModal">&times;</button>
             </div>
             <div class="modal-body">
+                <!-- Выбор модели -->
+                <div class="settings-section">
+                    <h3>🤖 Выбор модели</h3>
+                    <div class="form-group">
+                        <label for="settingsModelSelect">Активная модель:</label>
+                        <select id="settingsModelSelect" class="model-select">
+                            <option value="">Загрузка моделей...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="settingsCustomModel">Или укажите модель вручную:</label>
+                        <input type="text" id="settingsCustomModel" placeholder="gpt-4o-mini, gpt-5.5, claude-sonnet-4...">
+                    </div>
+                </div>
+                
                 <!-- API Settings -->
                 <div class="settings-section">
                     <h3>🌐 API настройки</h3>

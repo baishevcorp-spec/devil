@@ -253,6 +253,16 @@ export class ChatPanel {
         });
         break;
       }
+      case 'getAvailableModels': {
+        const models = this.multiModelManager?.getAvailableModels() || [];
+        const currentModel = this.multiModelManager?.getCurrentModel();
+        this._panel.webview.postMessage({
+          type: 'availableModels',
+          models: models,
+          currentModel: currentModel?.model || this.configManager.getModel()
+        });
+        break;
+      }
     }
   }
 
@@ -512,6 +522,20 @@ export class ChatPanel {
       '                <button class="modal-close" id="closeSettingsModal">&times;</button>' +
       '            </div>' +
       '            <div class="modal-body">' +
+      '                <!-- Выбор модели -->' +
+      '                <div class="settings-section">' +
+      '                    <h3>🤖 Выбор модели</h3>' +
+      '                    <div class="form-group">' +
+      '                        <label for="settingsModelSelect">Активная модель:</label>' +
+      '                        <select id="settingsModelSelect" class="model-select">' +
+      '                            <option value="">Загрузка моделей...</option>' +
+      '                        </select>' +
+      '                    </div>' +
+      '                    <div class="form-group">' +
+      '                        <label for="settingsCustomModel">Или укажите модель вручную:</label>' +
+      '                        <input type="text" id="settingsCustomModel" placeholder="gpt-4o-mini, gpt-5.5, claude-sonnet-4...">' +
+      '                    </div>' +
+      '                </div>' +
       '                <div class="settings-section">' +
       '                    <h3>🌐 API настройки</h3>' +
       '                    <div class="form-group">' +
@@ -521,10 +545,6 @@ export class ChatPanel {
       '                    <div class="form-group">' +
       '                        <label for="settingsApiKey">API Key:</label>' +
       '                        <input type="password" id="settingsApiKey" placeholder="sk-...">' +
-      '                    </div>' +
-      '                    <div class="form-group">' +
-      '                        <label for="settingsModel">Модель по умолчанию:</label>' +
-      '                        <input type="text" id="settingsModel" placeholder="gpt-4o-mini">' +
       '                    </div>' +
       '                    <div class="form-group">' +
       '                        <label for="settingsMaxRetries">Максимум попыток:</label>' +

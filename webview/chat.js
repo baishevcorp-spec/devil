@@ -1,24 +1,74 @@
+// webview/chat.js (fully fixed)
 (function () {
   // @ts-ignore
   const vscode = acquireVsCodeApi();
 
-  const messageInput = document.getElementById('messageInput');
-  const sendButton = document.getElementById('sendButton');
-  const messagesArea = document.getElementById('messagesArea');
+  // ========================================
+  // Кэшируем элементы DOM
+  // ========================================
+  let messageInput = null;
+  let sendButton = null;
+  let messagesArea = null;
 
-  // Загружаем историю из state
-  const savedState = vscode.getState();
-  if (savedState && savedState.messages) {
-    savedState.messages.forEach(function (msg) {
-      addMessage(msg.role, msg.content, false);
-    });
+  // ========================================
+  // Функции модалки настроек (на уровне IIFE, доступны отовсюду)
+  // ========================================
+  function openSettingsModal() {
+    const modal = document.getElementById('settingsModal');
+    if (modal) {
+      modal.classList.add('active');
+      console.log('[Devil] Модалка открыта');
+      vscode.postMessage({ type: 'getAvailableModels' });
+    }
   }
 
-  // Инициализация marked
-  const markedAvailable = typeof marked !== 'undefined';
-  const hljsAvailable = typeof hljs !== 'undefined';
+  function closeSettingsModalHandler() {
+    const modal = document.getElementById('settingsModal');
+    if (modal) {
+      modal.classList.remove('active');
+      console.log('[Devil] Модалка закрыта');
+    }
+  }
 
-  if (markedAvailable) {
+  // ========================================
+  // Инициализация UI
+  // ========================================
+  function initUI() {
+    console.log('[Devil] Инициализация UI...');
+
+    try {
+      messageInput = document.getElementById('messageInput');
+      sendButton = document.getElementById('sendButton');
+      messagesArea = document.getElementById('messagesArea');
+
+      if (!messageInput || !sendButton || !messagesArea) {
+        throw new Error('Один из элементов не найден');
+      }
+    } catch (err) {
+      console.error('[Devil] Ошибка при загрузке DOM-элементов:', err);
+      return;
+    }
+
+    initMarkdown();
+    initButtons();
+    loadHistory();
+    initSettingsModal();
+    initCommandDropdown();
+
+    console.log('[Devil] UI инициализирован успешно.');
+  }
+
+  // ========================================
+  // Инициализация Markdown
+  // ========================================
+  function initMarkdown() {
+    if (typeof marked === 'undefined') {
+      console.warn('[Devil] marked не загружен');
+      return;
+    }
+
+    const hljsAvailable = typeof hljs !== 'undefined';
+
     marked.setOptions({
       breaks: true,
       gfm: true,
@@ -29,7 +79,7 @@
           try {
             return hljs.highlight(code, { language: lang }).value;
           } catch (err) {
-            console.error('Highlight error:', err);
+            console.error('[Devil] Highlight error:', err);
           }
         }
         return code;
@@ -37,28 +87,39 @@
     });
   }
 
-  // Кнопка очистки
-  const clearButton = document.querySelector('.header-actions button[title="Очистить историю"]');
-  if (clearButton) {
-    clearButton.addEventListener('click', clearHistory);
+  // ========================================
+  // Инициализация кнопок
+  // ========================================
+  function initButtons() {
+    if (!messageInput || !sendButton) return;
+
+    // Auto-resize textarea
+    messageInput.addEventListener('input', function () {
+      messageInput.style.height = 'auto';
+      messageInput.style.height = Math.min(messageInput.scrollHeight, 200) + 'px';
+    });
+
+    // Отправка по Enter
+    messageInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // Отправка по кнопке
+    sendButton.addEventListener('click', sendMessage);
+
+    // Кнопка очистки
+    const clearButton = document.querySelector('.header-actions button[title="Очистить историю"]');
+    if (clearButton) {
+      clearButton.addEventListener('click', clearHistory);
+    }
   }
 
-  // Auto-resize textarea
-  messageInput.addEventListener('input', function () {
-    this.style.height = 'auto';
-    this.style.height = Math.min(this.scrollHeight, 200) + 'px';
-  });
-
-  // Отправка по Enter
-  messageInput.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-
-  sendButton.addEventListener('click', sendMessage);
-
+  // ========================================
+  // Отправка сообщений
+  // ========================================
   function sendMessage() {
     const text = messageInput.value.trim();
     if (!text) return;
@@ -96,6 +157,7 @@
     messageDiv.className = 'message ' + role + '-message';
 
     const avatar = role === 'user' ? '👤' : '🤖';
+    const markedAvailable = typeof marked !== 'undefined';
 
     let renderedContent = content;
     if (role === 'assistant' && markedAvailable) {
@@ -140,7 +202,7 @@
         button.className = 'copy-button';
         button.textContent = '📋 Копировать';
         button.onclick = function () {
-          navigator.clipboard.writeText(codeBlock.textContent).then(function () {
+          navigator.clipboard.writeText(codeBlock.textContent || '').then(function () {
             button.textContent = '✓ Скопировано';
             setTimeout(function () {
               button.textContent = '📋 Копировать';
@@ -182,19 +244,36 @@
     return div.innerHTML;
   }
 
+  // ========================================
+  // Загрузка истории
+  // ========================================
+  function loadHistory() {
+    const savedState = vscode.getState();
+    if (savedState && savedState.messages && Array.isArray(savedState.messages)) {
+      savedState.messages.forEach(function (msg) {
+        addMessage(msg.role, msg.content, false);
+      });
+    }
+  }
+
+  // ========================================
+  // Обработка сообщений от extension
+  // ========================================
   window.addEventListener('message', function (event) {
     const message = event.data;
 
     switch (message.type) {
       case 'agentResponse':
         removeLoadingIndicator();
-        addMessage('assistant', message.content);
-        setTimeout(() => setupFileLinkHandlers(), 100);
+        addMessage('assistant', message.content || '');
+        setTimeout(setupFileLinkHandlers, 100);
         break;
+
       case 'error':
         removeLoadingIndicator();
         addMessage('assistant', 'Ошибка: ' + (message.text || 'Неизвестная ошибка'));
         break;
+
       case 'history':
         if (message.messages && Array.isArray(message.messages)) {
           messagesArea.innerHTML = '';
@@ -203,245 +282,250 @@
           });
         }
         break;
+
       case 'executeCommand':
-        messageInput.value = message.content;
-        sendMessage();
+        if (message.content && messageInput) {
+          messageInput.value = message.content;
+          sendMessage();
+        }
         break;
+
       case 'loadSettings':
         console.log('[Devil] Загружены настройки:', message.settings);
-        document.getElementById('settingsBaseUrl').value = message.settings.baseUrl || '';
-        document.getElementById('settingsApiKey').value = message.settings.apiKey || '';
-        document.getElementById('settingsModel').value = message.settings.model || '';
-        document.getElementById('settingsMaxRetries').value = message.settings.maxRetries || 3;
-        document.getElementById('settingsSystemPrompt').value = message.settings.systemPrompt || '';
-        document.getElementById('settingsDebugMode').checked = message.settings.debugMode || false;
+        loadSettingsIntoUI(message.settings);
+        break;
+
+      case 'availableModels':
+        console.log('[Devil] Загружены модели:', message.models);
+        populateModelSelect(message.models, message.currentModel);
         break;
     }
   });
 
-  function setupFileLinkHandlers() {
-    const links = document.querySelectorAll('a');
-    links.forEach((link) => {
-      const href = link.getAttribute('href');
-      if (href && href.startsWith('vscode://file/')) {
-        link.addEventListener('click', function (e) {
-          e.preventDefault();
-          const url = href.substring('vscode://file/'.length);
-          const lineMatch = url.match(/:(\d+)$/);
-          let filePath = url;
-          let line = 1;
-
-          if (lineMatch) {
-            line = parseInt(lineMatch[1], 10);
-            filePath = url.substring(0, url.lastIndexOf(':'));
-          }
-
-          vscode.postMessage({
-            type: 'openFile',
-            filePath: filePath,
-            line: line,
-          });
-        });
-      }
-    });
-  }
-
-  setTimeout(() => setupFileLinkHandlers(), 300);
-
   // ========================================
-  // Settings Modal — ВНУТРИ IIFE!
+  // Настройки модального окна
   // ========================================
-  console.log('[Devil] Инициализация модалки настроек...');
+  function initSettingsModal() {
+    console.log('[Devil] Инициализация модалки настроек...');
 
-  const settingsButton = document.querySelector('.header-actions button[title="Настройки"]');
-  const settingsModal = document.getElementById('settingsModal');
-  const closeSettingsModal = document.getElementById('closeSettingsModal');
-  const cancelSettings = document.getElementById('cancelSettings');
-  const saveSettings = document.getElementById('saveSettings');
+    const settingsButton = document.querySelector('.header-actions button[title="Настройки"]');
+    const settingsModal = document.getElementById('settingsModal');
+    const closeSettingsModal = document.getElementById('closeSettingsModal');
+    const cancelSettings = document.getElementById('cancelSettings');
+    const saveSettings = document.getElementById('saveSettings');
 
-  console.log('[Devil] settingsButton:', settingsButton);
-  console.log('[Devil] settingsModal:', settingsModal);
+    console.log('[Devil] settingsButton:', settingsButton);
+    console.log('[Devil] settingsModal:', settingsModal);
 
-  function openSettingsModal() {
-    if (settingsModal) {
-      settingsModal.classList.add('active');
-      console.log('[Devil] Модалка открыта');
+    // Клик по кнопке настроек
+    if (settingsButton) {
+      settingsButton.addEventListener('click', function () {
+        console.log('[Devil] Клик по кнопке Настройки');
+        vscode.postMessage({ type: 'openSettings' });
+        openSettingsModal();
+      });
     }
-  }
 
-  function closeSettingsModalHandler() {
-    if (settingsModal) {
-      settingsModal.classList.remove('active');
-      console.log('[Devil] Модалка закрыта');
+    // Закрытие по крестику
+    if (closeSettingsModal) {
+      closeSettingsModal.addEventListener('click', closeSettingsModalHandler);
     }
-  }
 
-  if (settingsButton) {
-    settingsButton.addEventListener('click', () => {
-      console.log('[Devil] Клик по кнопке Настройки');
-      vscode.postMessage({ type: 'openSettings' });
-      openSettingsModal();
-    });
-  }
+    // Закрытие по Отмена
+    if (cancelSettings) {
+      cancelSettings.addEventListener('click', closeSettingsModalHandler);
+    }
 
-  if (closeSettingsModal) {
-    closeSettingsModal.addEventListener('click', closeSettingsModalHandler);
-  }
+    // Закрытие по клику на overlay
+    if (settingsModal) {
+      settingsModal.addEventListener('click', function (e) {
+        if (e.target === settingsModal) {
+          closeSettingsModalHandler();
+        }
+      });
+    }
 
-  if (cancelSettings) {
-    cancelSettings.addEventListener('click', closeSettingsModalHandler);
-  }
-
-  if (settingsModal) {
-    settingsModal.addEventListener('click', (e) => {
-      if (e.target === settingsModal) {
+    // Закрытие по Escape
+    document.addEventListener('keydown', function (e) {
+      const modal = document.getElementById('settingsModal');
+      if (e.key === 'Escape' && modal && modal.classList.contains('active')) {
         closeSettingsModalHandler();
       }
     });
-  }
 
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && settingsModal && settingsModal.classList.contains('active')) {
-      closeSettingsModalHandler();
-    }
-  });
+    // Сохранение настроек
+    if (saveSettings) {
+      saveSettings.addEventListener('click', function () {
+        const baseUrlEl = document.getElementById('settingsBaseUrl');
+        const apiKeyEl = document.getElementById('settingsApiKey');
+        const customModelEl = document.getElementById('settingsCustomModel');
+        const modelSelectEl = document.getElementById('settingsModelSelect');
+        const maxRetriesEl = document.getElementById('settingsMaxRetries');
+        const systemPromptEl = document.getElementById('settingsSystemPrompt');
+        const debugModeEl = document.getElementById('settingsDebugMode');
 
-  if (saveSettings) {
-    saveSettings.addEventListener('click', () => {
-      const baseUrl = document.getElementById('settingsBaseUrl').value.trim();
-      const apiKey = document.getElementById('settingsApiKey').value.trim();
-      const model = document.getElementById('settingsModel').value.trim();
-      const maxRetries = parseInt(document.getElementById('settingsMaxRetries').value, 10);
-      const systemPrompt = document.getElementById('settingsSystemPrompt').value;
-      const debugMode = document.getElementById('settingsDebugMode').checked;
+        const baseUrl = baseUrlEl ? baseUrlEl.value.trim() : '';
+        const apiKey = apiKeyEl ? apiKeyEl.value.trim() : '';
+        const model =
+          (customModelEl ? customModelEl.value.trim() : '') ||
+          (modelSelectEl ? modelSelectEl.value : '');
+        const maxRetries = parseInt(maxRetriesEl ? maxRetriesEl.value || '3' : '3', 10);
+        const systemPrompt = systemPromptEl ? systemPromptEl.value : '';
+        const debugMode = debugModeEl ? debugModeEl.checked : false;
 
-      // Валидация
-      if (!baseUrl) {
-        alert('⚠️ Base URL не может быть пустым');
-        return;
-      }
-      if (!apiKey) {
-        alert('⚠️ API Key не может быть пустым');
-        return;
-      }
-      if (!model) {
-        alert('⚠️ Модель не может быть пустой');
-        return;
-      }
-      try {
-        new URL(baseUrl);
-      } catch (e) {
-        alert('⚠️ Неверный формат Base URL');
-        return;
-      }
-      if (isNaN(maxRetries) || maxRetries < 1 || maxRetries > 10) {
-        alert('⚠️ Максимум попыток должен быть от 1 до 10');
-        return;
-      }
+        if (!baseUrl) {
+          alert('⚠️ Base URL не может быть пустым');
+          return;
+        }
+        if (!apiKey) {
+          alert('⚠️ API Key не может быть пустым');
+          return;
+        }
+        if (!model) {
+          alert('⚠️ Модель не может быть пустой');
+          return;
+        }
 
-      const settings = {
-        baseUrl,
-        apiKey,
-        model,
-        maxRetries,
-        systemPrompt,
-        debugMode,
-      };
+        const settings = {
+          baseUrl: baseUrl,
+          apiKey: apiKey,
+          model: model,
+          maxRetries: maxRetries,
+          systemPrompt: systemPrompt,
+          debugMode: debugMode,
+        };
 
-      console.log('[Devil] Сохранение настроек:', settings);
+        console.log('[Devil] Сохранение настроек:', settings);
+        vscode.postMessage({
+          type: 'saveSettings',
+          settings: settings,
+        });
 
-      vscode.postMessage({
-        type: 'saveSettings',
-        settings: settings,
+        closeSettingsModalHandler();
       });
-
-      closeSettingsModalHandler();
-    });
+    }
   }
+
   // ========================================
   // Command Dropdown
-  console.log('[Devil] Command Dropdown инициализирован');
-  console.log('[Devil] commandButton:', document.getElementById('commandButton'));
-  console.log('[Devil] commandDropdown:', document.getElementById('commandDropdown'));
-  console.log('[Devil] commandSearch:', document.getElementById('commandSearch'));
-  console.log('[Devil] commandList:', document.getElementById('commandList'));
-
   // ========================================
-  const COMMANDS = [
-    { name: '/help', desc: 'Список всех команд и справка' },
-    { name: '/explain', desc: 'Объяснить код файла или выделенного фрагмента' },
-    { name: '/refactor', desc: 'Предложить рефакторинг кода (SOLID, паттерны)' },
-    { name: '/scan', desc: 'Сканировать файл и показать содержимое' },
-    { name: '/search', desc: 'Полнотекстовый поиск по проекту' },
-    { name: '/whereis', desc: 'Найти все использования символа в проекте' },
-    { name: '/diff', desc: 'Получить diff между коммитами Git' },
-    { name: '/git', desc: 'Git-операции (log, status, branch)' },
-    { name: '/roadmap generate', desc: 'Сгенерировать Roadmap проекта' },
-    { name: '/checklist generate', desc: 'Сгенерировать чек-лист файлов' },
-    { name: '/memory show', desc: 'Показать графовую память проекта' },
-    { name: '/memory add', desc: 'Добавить узел в графовую память' },
-    { name: '/memory delete', desc: 'Удалить узел из графовой памяти' },
-    { name: '/model switch', desc: 'Переключить активную модель LLM' },
-    { name: '/model current', desc: 'Показать текущую активную модель' },
-    { name: '/rebuild', desc: 'Перестроить индекс поиска' },
-    { name: '/lint', desc: 'Запустить линтер и показать отчёт' },
-    { name: '/test generate', desc: 'Сгенерировать юнит-тесты для файла' },
-  ];
+  function initCommandDropdown() {
+    console.log('[Devil] Command Dropdown инициализирован');
 
-  const commandButton = document.getElementById('commandButton');
-  const commandDropdown = document.getElementById('commandDropdown');
-  const commandSearch = document.getElementById('commandSearch');
-  const commandList = document.getElementById('commandList');
+    var COMMANDS = [
+      { name: '/help', desc: 'Список всех команд и справка' },
+      { name: '/explain', desc: 'Объяснить код файла или выделенного фрагмента' },
+      { name: '/refactor', desc: 'Предложить рефакторинг кода (SOLID, паттерны)' },
+      { name: '/scan', desc: 'Сканировать файл и показать содержимое' },
+      { name: '/search', desc: 'Полнотекстовый поиск по проекту' },
+      { name: '/whereis', desc: 'Найти все использования символа в проекте' },
+      { name: '/diff', desc: 'Получить diff между коммитами Git' },
+      { name: '/git', desc: 'Git-операции (log, status, branch)' },
+      { name: '/roadmap generate', desc: 'Сгенерировать Roadmap проекта' },
+      { name: '/checklist generate', desc: 'Сгенерировать чек-лист файлов' },
+      { name: '/memory show', desc: 'Показать графовую память проекта' },
+      { name: '/memory add', desc: 'Добавить узел в графовую память' },
+      { name: '/memory delete', desc: 'Удалить узел из графовой памяти' },
+      { name: '/rebuild', desc: 'Перестроить индекс поиска' },
+      { name: '/lint', desc: 'Запустить линтер и показать отчёт' },
+      { name: '/test generate', desc: 'Сгенерировать юнит-тесты для файла' },
+    ];
 
-  let selectedCommandIndex = 0;
-  let filteredCommands = [...COMMANDS];
+    var commandButton = document.getElementById('commandButton');
+    var commandDropdown = document.getElementById('commandDropdown');
+    var commandSearch = document.getElementById('commandSearch');
+    var commandList = document.getElementById('commandList');
 
-  function renderCommands(filter = '') {
-    filteredCommands = COMMANDS.filter(cmd =>
-      cmd.name.toLowerCase().includes(filter.toLowerCase()) ||
-      cmd.desc.toLowerCase().includes(filter.toLowerCase())
-    );
-
-    if (filteredCommands.length === 0) {
-      commandList.innerHTML = '<div class="command-list-empty">Команды не найдены</div>';
+    if (!commandButton || !commandDropdown || !commandSearch || !commandList) {
+      console.warn('[Devil] Отсутствуют элементы command dropdown');
       return;
     }
 
-    commandList.innerHTML = filteredCommands.map((cmd, index) => `
-      <div class="command-list-item ${index === selectedCommandIndex ? 'selected' : ''}" data-command="${cmd.name}" data-index="${index}">
-        <span class="command-name">${cmd.name}</span>
-        <span class="command-desc">${cmd.desc}</span>
-      </div>
-    `).join('');
+    var selectedCommandIndex = 0;
+    var filteredCommands = COMMANDS.slice();
 
-    // Обработчики клика
-    commandList.querySelectorAll('.command-list-item').forEach(item => {
-      item.addEventListener('click', () => {
-        insertCommand(item.dataset.command);
+    function renderCommands(filter) {
+      if (!filter) filter = '';
+      var filterLower = filter.toLowerCase();
+
+      filteredCommands = COMMANDS.filter(function (cmd) {
+        return (
+          cmd.name.toLowerCase().indexOf(filterLower) !== -1 ||
+          cmd.desc.toLowerCase().indexOf(filterLower) !== -1
+        );
       });
-    });
-  }
 
-  function insertCommand(command) {
-    messageInput.value = command + ' ';
-    messageInput.focus();
-    closeCommandDropdown();
-  }
+      if (filteredCommands.length === 0) {
+        commandList.innerHTML = '<div class="command-list-empty">Команды не найдены</div>';
+        return;
+      }
 
-  function openCommandDropdown() {
-    commandDropdown.style.display = 'flex';
-    commandSearch.value = '';
-    selectedCommandIndex = 0;
-    renderCommands();
-    setTimeout(() => commandSearch.focus(), 50);
-  }
+      commandList.innerHTML = filteredCommands
+        .map(function (cmd, index) {
+          var selectedClass = index === selectedCommandIndex ? 'selected' : '';
+          return (
+            '<div class="command-list-item ' +
+            selectedClass +
+            '" data-command="' +
+            cmd.name +
+            '" data-index="' +
+            index +
+            '">' +
+            '<span class="command-name">' +
+            cmd.name +
+            '</span>' +
+            '<span class="command-desc">' +
+            cmd.desc +
+            '</span>' +
+            '</div>'
+          );
+        })
+        .join('');
 
-  function closeCommandDropdown() {
-    commandDropdown.style.display = 'none';
-  }
+      var items = commandList.querySelectorAll('.command-list-item');
+      items.forEach(function (item) {
+        item.addEventListener('click', function () {
+          insertCommand(item.getAttribute('data-command'));
+        });
+      });
+    }
 
-  if (commandButton) {
-    commandButton.addEventListener('click', (e) => {
+    function insertCommand(command) {
+      if (messageInput) {
+        messageInput.value = command + ' ';
+        messageInput.focus();
+        closeCommandDropdown();
+      }
+    }
+
+    function openCommandDropdown() {
+      commandDropdown.style.display = 'flex';
+      commandSearch.value = '';
+      selectedCommandIndex = 0;
+      renderCommands();
+      setTimeout(function () {
+        commandSearch.focus();
+      }, 50);
+    }
+
+    function closeCommandDropdown() {
+      commandDropdown.style.display = 'none';
+    }
+
+    function updateSelectedCommand() {
+      var items = commandList.querySelectorAll('.command-list-item');
+      items.forEach(function (item, index) {
+        if (index === selectedCommandIndex) {
+          item.classList.add('selected');
+          item.scrollIntoView({ block: 'nearest' });
+        } else {
+          item.classList.remove('selected');
+        }
+      });
+    }
+
+    // Клик по кнопке открытия
+    commandButton.addEventListener('click', function (e) {
       e.stopPropagation();
       if (commandDropdown.style.display === 'none' || !commandDropdown.style.display) {
         openCommandDropdown();
@@ -449,16 +533,14 @@
         closeCommandDropdown();
       }
     });
-  }
 
-  if (commandSearch) {
-    commandSearch.addEventListener('input', (e) => {
+    // Поиск и навигация
+    commandSearch.addEventListener('input', function (e) {
       selectedCommandIndex = 0;
       renderCommands(e.target.value);
     });
 
-    // Навигация стрелками
-    commandSearch.addEventListener('keydown', (e) => {
+    commandSearch.addEventListener('keydown', function (e) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         selectedCommandIndex = Math.min(selectedCommandIndex + 1, filteredCommands.length - 1);
@@ -476,31 +558,113 @@
         closeCommandDropdown();
       }
     });
-  }
 
-  function updateSelectedCommand() {
-    const items = commandList.querySelectorAll('.command-list-item');
-    items.forEach((item, index) => {
-      if (index === selectedCommandIndex) {
-        item.classList.add('selected');
-        item.scrollIntoView({ block: 'nearest' });
-      } else {
-        item.classList.remove('selected');
+    // Закрытие по клику вне dropdown
+    document.addEventListener('click', function (e) {
+      if (
+        commandDropdown.style.display === 'flex' &&
+        !commandDropdown.contains(e.target) &&
+        e.target !== commandButton
+      ) {
+        closeCommandDropdown();
       }
     });
   }
 
-  // Закрытие по клику вне dropdown
-  document.addEventListener('click', (e) => {
-    if (commandDropdown && !commandDropdown.contains(e.target) && e.target !== commandButton) {
-      closeCommandDropdown();
+  // ========================================
+  // Заглушки и помощники
+  // ========================================
+  function setupFileLinkHandlers() {
+    var links = document.querySelectorAll('.message-text a');
+    links.forEach(function (link) {
+      var href = link.getAttribute('href');
+      if (href && href.indexOf('vscode://file/') === 0) {
+        link.addEventListener('click', function (e) {
+          e.preventDefault();
+          var url = href.substring('vscode://file/'.length);
+          var lineMatch = url.match(/:(\d+)$/);
+          var filePath = url;
+          var line = 1;
+
+          if (lineMatch) {
+            line = parseInt(lineMatch[1], 10);
+            filePath = url.substring(0, url.lastIndexOf(':'));
+          }
+
+          vscode.postMessage({
+            type: 'openFile',
+            filePath: filePath,
+            line: line,
+          });
+        });
+      }
+    });
+  }
+
+  function loadSettingsIntoUI(settings) {
+    console.log('[Devil] loadSettingsIntoUI', settings);
+
+    var baseUrlInput = document.getElementById('settingsBaseUrl');
+    var apiKeyInput = document.getElementById('settingsApiKey');
+    var modelInput = document.getElementById('settingsCustomModel');
+    var maxRetriesInput = document.getElementById('settingsMaxRetries');
+    var systemPromptInput = document.getElementById('settingsSystemPrompt');
+    var debugModeInput = document.getElementById('settingsDebugMode');
+
+    if (baseUrlInput) baseUrlInput.value = settings.baseUrl || '';
+    if (apiKeyInput) apiKeyInput.value = settings.apiKey || '';
+    if (modelInput) modelInput.value = settings.model || '';
+    if (maxRetriesInput)
+      maxRetriesInput.value = settings.maxRetries != null ? settings.maxRetries : 3;
+    if (systemPromptInput) systemPromptInput.value = settings.systemPrompt || '';
+    if (debugModeInput) debugModeInput.checked = !!settings.debugMode;
+  }
+
+  function populateModelSelect(models, currentModel) {
+    var modelSelect = document.getElementById('settingsModelSelect');
+    if (!modelSelect) return;
+
+    modelSelect.innerHTML = '<option value="">-- Выберите модель --</option>';
+
+    if (!models || models.length === 0) {
+      return;
+    }
+
+    models.forEach(function (model) {
+      var option = document.createElement('option');
+      // model — это объект ModelConfig с полями id, name, model, baseUrl и т.д.
+      option.value = model.model || model;
+      option.textContent =
+        (model.name || model.model || model) + ' (' + (model.model || model) + ')';
+      if ((model.model || model) === currentModel) {
+        option.selected = true;
+      }
+      modelSelect.appendChild(option);
+    });
+
+    // Синхронизируем с полем ручного ввода
+    var customModelInput = document.getElementById('settingsCustomModel');
+    if (customModelInput && !customModelInput.value && currentModel) {
+      customModelInput.value = currentModel;
+    }
+  }
+
+  // Обработчик изменения dropdown — синхронизация с полем ввода
+  document.addEventListener('change', function (e) {
+    if (e.target && e.target.id === 'settingsModelSelect') {
+      var customModelInput = document.getElementById('settingsCustomModel');
+      if (customModelInput && e.target.value) {
+        customModelInput.value = e.target.value;
+      }
     }
   });
 
-  // Закрытие по Escape (глобально)
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && commandDropdown && commandDropdown.style.display !== 'none') {
-      closeCommandDropdown();
-    }
-  });
+  // ========================================
+  // Запуск
+  // ========================================
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initUI);
+  } else {
+    initUI();
+  }
 })();

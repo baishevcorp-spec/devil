@@ -611,18 +611,18 @@ body {
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
-  display: none; /* Скрыта по умолчанию */
+  display: none;
   align-items: center;
   justify-content: center;
   z-index: 9999;
 }
 
 .modal-overlay.active {
-  display: flex; /* Показывается при добавлении класса active */
+  display: flex;
 }
 
 .modal {
-  background: var(--vscode-editor-background);
+  background: #252526;
   border-radius: 8px;
   width: 90%;
   max-width: 600px;
@@ -630,6 +630,7 @@ body {
   display: flex;
   flex-direction: column;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border: 1px solid #3e3e42;
 }
 
 .modal-header {
@@ -637,13 +638,14 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid #3e3e42;
 }
 
 .modal-header h2 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+  color: #ffffff;
 }
 
 .modal-close {
@@ -651,7 +653,7 @@ body {
   border: none;
   font-size: 24px;
   cursor: pointer;
-  color: var(--vscode-foreground);
+  color: #d4d4d4;
   padding: 0;
   width: 32px;
   height: 32px;
@@ -662,7 +664,7 @@ body {
 }
 
 .modal-close:hover {
-  background: var(--vscode-button-hoverBackground);
+  background: #3e3e42;
 }
 
 .modal-body {
@@ -679,6 +681,7 @@ body {
   margin: 0 0 12px 0;
   font-size: 16px;
   font-weight: 600;
+  color: #ffffff;
 }
 
 .form-group {
@@ -690,26 +693,29 @@ body {
   margin-bottom: 6px;
   font-size: 13px;
   font-weight: 500;
+  color: #d4d4d4;
 }
 
 .form-group input[type='text'],
 .form-group input[type='password'],
 .form-group input[type='number'],
-.form-group textarea {
+.form-group textarea,
+.model-select {
   width: 100%;
   padding: 8px 12px;
-  background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border);
+  background: #1e1e1e;
+  border: 1px solid #3e3e42;
   border-radius: 4px;
-  color: var(--vscode-input-foreground);
-  font-family: var(--vscode-editor-font-family);
+  color: #d4d4d4;
+  font-family: inherit;
   font-size: 13px;
 }
 
 .form-group input:focus,
-.form-group textarea:focus {
+.form-group textarea:focus,
+.model-select:focus {
   outline: none;
-  border-color: var(--vscode-focusBorder);
+  border-color: #0e639c;
 }
 
 .checkbox-group {
@@ -732,7 +738,7 @@ body {
   justify-content: flex-end;
   gap: 12px;
   padding: 16px 20px;
-  border-top: 1px solid var(--vscode-panel-border);
+  border-top: 1px solid #3e3e42;
 }
 
 .btn {
@@ -745,21 +751,21 @@ body {
 }
 
 .btn-primary {
-  background: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
+  background: #0e639c;
+  color: #ffffff;
 }
 
 .btn-primary:hover {
-  background: var(--vscode-button-hoverBackground);
+  background: #1177bb;
 }
 
 .btn-secondary {
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
+  background: #3e3e42;
+  color: #d4d4d4;
 }
 
 .btn-secondary:hover {
-  background: var(--vscode-button-secondaryHoverBackground);
+  background: #505055;
 }
 
 /* ========================================
@@ -890,4 +896,27 @@ body {
 
 .command-list::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+/* Model Select */
+.model-select {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+  color: var(--vscode-input-foreground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.model-select:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+.model-select option {
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
 }

@@ -12,9 +12,9 @@ jest.mock('axios', () => ({
   __esModule: true,
   default: {
     create: jest.fn(() => mockAxiosInstance),
-    isAxiosError: jest.fn((error: any) => error?.isAxiosError === true)
+    isAxiosError: jest.fn((error: any) => error?.isAxiosError === true),
   },
-  isAxiosError: jest.fn((error: any) => error?.isAxiosError === true)
+  isAxiosError: jest.fn((error: any) => error?.isAxiosError === true),
 }));
 
 // Импортируем axios после jest.mock
@@ -31,12 +31,14 @@ describe('LLMProvider', () => {
     // Явно сбрасываем моки axios, не трогая vscode
     (axios.create as jest.Mock).mockReset();
     (axios.isAxiosError as unknown as jest.Mock).mockReset();
-    (axios.isAxiosError as unknown as jest.Mock).mockImplementation((error: any) => error?.isAxiosError === true);
+    (axios.isAxiosError as unknown as jest.Mock).mockImplementation(
+      (error: any) => error?.isAxiosError === true
+    );
 
     // Создаём свежий мок-инстанс для каждого теста
     mockAxiosInstance = {
       post: jest.fn(),
-      get: jest.fn()
+      get: jest.fn(),
     };
 
     // Настраиваем axios.create так, чтобы он возвращал наш мок-инстанс
@@ -67,16 +69,16 @@ describe('LLMProvider', () => {
           choices: [
             {
               message: { content: 'Привет, мир!' },
-              finish_reason: 'stop'
-            }
+              finish_reason: 'stop',
+            },
           ],
           model: 'gpt-4o-mini',
           usage: {
             prompt_tokens: 10,
             completion_tokens: 5,
-            total_tokens: 15
-          }
-        }
+            total_tokens: 15,
+          },
+        },
       };
 
       mockAxiosInstance.post.mockResolvedValueOnce(mockResponse);
@@ -94,22 +96,20 @@ describe('LLMProvider', () => {
         isAxiosError: true,
         response: {
           status: 500,
-          data: { error: 'Internal server error' }
+          data: { error: 'Internal server error' },
         },
-        message: 'Request failed with status code 500'
+        message: 'Request failed with status code 500',
       };
 
       const mockResponse = {
         data: {
           choices: [{ message: { content: 'Успех' }, finish_reason: 'stop' }],
           model: 'gpt-4o-mini',
-          usage: { total_tokens: 10 }
-        }
+          usage: { total_tokens: 10 },
+        },
       };
 
-      mockAxiosInstance.post
-        .mockRejectedValueOnce(error500)
-        .mockResolvedValueOnce(mockResponse);
+      mockAxiosInstance.post.mockRejectedValueOnce(error500).mockResolvedValueOnce(mockResponse);
 
       (axios.isAxiosError as unknown as jest.Mock).mockReturnValue(true);
 
@@ -123,7 +123,7 @@ describe('LLMProvider', () => {
       const timeoutError = {
         isAxiosError: true,
         code: 'ECONNABORTED',
-        message: 'Timeout'
+        message: 'Timeout',
       };
 
       mockAxiosInstance.post.mockRejectedValue(timeoutError);
@@ -138,9 +138,9 @@ describe('LLMProvider', () => {
         isAxiosError: true,
         response: {
           status: 429,
-          data: { error: 'Rate limit exceeded' }
+          data: { error: 'Rate limit exceeded' },
         },
-        message: 'Request failed with status code 429'
+        message: 'Request failed with status code 429',
       };
 
       mockAxiosInstance.post.mockRejectedValue(error429);
@@ -153,8 +153,8 @@ describe('LLMProvider', () => {
       const mockResponse = {
         data: {
           choices: [],
-          model: 'gpt-4o-mini'
-        }
+          model: 'gpt-4o-mini',
+        },
       };
 
       mockAxiosInstance.post.mockResolvedValueOnce(mockResponse);
