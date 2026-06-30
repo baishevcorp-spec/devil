@@ -140,6 +140,7 @@
         <!-- Input Area -->
         <div class="input-area">
             <div class="input-container">
+                <button class="command-button" id="commandButton" title="Список команд">⌘</button>
                 <textarea
                     id="messageInput"
                     class="message-input"
@@ -147,11 +148,16 @@
                     rows="3"
                 ></textarea>
                 <button class="send-button" id="sendButton" title="Отправить (Enter)">
-                    <span class="send-icon">➤</span>
+                    <span class="send-icon"></span>
                 </button>
             </div>
             <div class="input-hints">
                 <span class="hint">💡 Команды: /explain, /refactor, /roadmap, /whereis, /scan</span>
+            </div>
+            <!-- Command Dropdown -->
+            <div class="command-dropdown" id="commandDropdown" style="display: none;">
+                <input type="text" class="command-search" id="commandSearch" placeholder="🔍 Поиск команды...">
+                <div class="command-list" id="commandList"></div>
             </div>
         </div>
     </div>

@@ -358,4 +358,149 @@
       closeSettingsModalHandler();
     });
   }
+  // ========================================
+  // Command Dropdown
+  console.log('[Devil] Command Dropdown инициализирован');
+  console.log('[Devil] commandButton:', document.getElementById('commandButton'));
+  console.log('[Devil] commandDropdown:', document.getElementById('commandDropdown'));
+  console.log('[Devil] commandSearch:', document.getElementById('commandSearch'));
+  console.log('[Devil] commandList:', document.getElementById('commandList'));
+
+  // ========================================
+  const COMMANDS = [
+    { name: '/help', desc: 'Список всех команд и справка' },
+    { name: '/explain', desc: 'Объяснить код файла или выделенного фрагмента' },
+    { name: '/refactor', desc: 'Предложить рефакторинг кода (SOLID, паттерны)' },
+    { name: '/scan', desc: 'Сканировать файл и показать содержимое' },
+    { name: '/search', desc: 'Полнотекстовый поиск по проекту' },
+    { name: '/whereis', desc: 'Найти все использования символа в проекте' },
+    { name: '/diff', desc: 'Получить diff между коммитами Git' },
+    { name: '/git', desc: 'Git-операции (log, status, branch)' },
+    { name: '/roadmap generate', desc: 'Сгенерировать Roadmap проекта' },
+    { name: '/checklist generate', desc: 'Сгенерировать чек-лист файлов' },
+    { name: '/memory show', desc: 'Показать графовую память проекта' },
+    { name: '/memory add', desc: 'Добавить узел в графовую память' },
+    { name: '/memory delete', desc: 'Удалить узел из графовой памяти' },
+    { name: '/model switch', desc: 'Переключить активную модель LLM' },
+    { name: '/model current', desc: 'Показать текущую активную модель' },
+    { name: '/rebuild', desc: 'Перестроить индекс поиска' },
+    { name: '/lint', desc: 'Запустить линтер и показать отчёт' },
+    { name: '/test generate', desc: 'Сгенерировать юнит-тесты для файла' },
+  ];
+
+  const commandButton = document.getElementById('commandButton');
+  const commandDropdown = document.getElementById('commandDropdown');
+  const commandSearch = document.getElementById('commandSearch');
+  const commandList = document.getElementById('commandList');
+
+  let selectedCommandIndex = 0;
+  let filteredCommands = [...COMMANDS];
+
+  function renderCommands(filter = '') {
+    filteredCommands = COMMANDS.filter(cmd =>
+      cmd.name.toLowerCase().includes(filter.toLowerCase()) ||
+      cmd.desc.toLowerCase().includes(filter.toLowerCase())
+    );
+
+    if (filteredCommands.length === 0) {
+      commandList.innerHTML = '<div class="command-list-empty">Команды не найдены</div>';
+      return;
+    }
+
+    commandList.innerHTML = filteredCommands.map((cmd, index) => `
+      <div class="command-list-item ${index === selectedCommandIndex ? 'selected' : ''}" data-command="${cmd.name}" data-index="${index}">
+        <span class="command-name">${cmd.name}</span>
+        <span class="command-desc">${cmd.desc}</span>
+      </div>
+    `).join('');
+
+    // Обработчики клика
+    commandList.querySelectorAll('.command-list-item').forEach(item => {
+      item.addEventListener('click', () => {
+        insertCommand(item.dataset.command);
+      });
+    });
+  }
+
+  function insertCommand(command) {
+    messageInput.value = command + ' ';
+    messageInput.focus();
+    closeCommandDropdown();
+  }
+
+  function openCommandDropdown() {
+    commandDropdown.style.display = 'flex';
+    commandSearch.value = '';
+    selectedCommandIndex = 0;
+    renderCommands();
+    setTimeout(() => commandSearch.focus(), 50);
+  }
+
+  function closeCommandDropdown() {
+    commandDropdown.style.display = 'none';
+  }
+
+  if (commandButton) {
+    commandButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (commandDropdown.style.display === 'none' || !commandDropdown.style.display) {
+        openCommandDropdown();
+      } else {
+        closeCommandDropdown();
+      }
+    });
+  }
+
+  if (commandSearch) {
+    commandSearch.addEventListener('input', (e) => {
+      selectedCommandIndex = 0;
+      renderCommands(e.target.value);
+    });
+
+    // Навигация стрелками
+    commandSearch.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedCommandIndex = Math.min(selectedCommandIndex + 1, filteredCommands.length - 1);
+        updateSelectedCommand();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedCommandIndex = Math.max(selectedCommandIndex - 1, 0);
+        updateSelectedCommand();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (filteredCommands[selectedCommandIndex]) {
+          insertCommand(filteredCommands[selectedCommandIndex].name);
+        }
+      } else if (e.key === 'Escape') {
+        closeCommandDropdown();
+      }
+    });
+  }
+
+  function updateSelectedCommand() {
+    const items = commandList.querySelectorAll('.command-list-item');
+    items.forEach((item, index) => {
+      if (index === selectedCommandIndex) {
+        item.classList.add('selected');
+        item.scrollIntoView({ block: 'nearest' });
+      } else {
+        item.classList.remove('selected');
+      }
+    });
+  }
+
+  // Закрытие по клику вне dropdown
+  document.addEventListener('click', (e) => {
+    if (commandDropdown && !commandDropdown.contains(e.target) && e.target !== commandButton) {
+      closeCommandDropdown();
+    }
+  });
+
+  // Закрытие по Escape (глобально)
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && commandDropdown && commandDropdown.style.display !== 'none') {
+      closeCommandDropdown();
+    }
+  });
 })();

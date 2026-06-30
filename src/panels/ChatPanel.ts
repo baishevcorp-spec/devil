@@ -482,6 +482,7 @@ export class ChatPanel {
       '        </div>' +
       '        <div class="input-area">' +
       '            <div class="input-container">' +
+      '                <button class="command-button" id="commandButton" title="Список команд">⌘</button>' +
       '                <textarea ' +
       '                    id="messageInput" ' +
       '                    class="message-input" ' +
@@ -494,6 +495,11 @@ export class ChatPanel {
       '            </div>' +
       '            <div class="input-hints">' +
       '                <span class="hint">💡 Команды: /help, /search, /scan, /diff, /whereis, /memory show, /roadmap generate, /checklist generate, /explain</span>' +
+      '            </div>' +
+      '            <!-- Command Dropdown -->' +
+      '            <div class="command-dropdown" id="commandDropdown" style="display: none;">' +
+      '                <input type="text" class="command-search" id="commandSearch" placeholder="🔍 Поиск команды...">' +
+      '                <div class="command-list" id="commandList"></div>' +
       '            </div>' +
       '        </div>' +
       '    </div>' +
