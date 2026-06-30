@@ -258,6 +258,10 @@ export class ChatPanel {
 
   private async _processUserMessage(content: string): Promise<void> {
     try {
+      // 1. Получаем базовый промпт из настроек (персонаж/правила агента)
+      const baseSystemPrompt = this.configManager.getDefaultSystemPrompt();
+
+      // 2. Строим динамический контекст проекта
       const context = await this.contextBuilder.buildContext(content, {
         includeProjectStructure: true,
         includeRoadmap: true,
@@ -270,8 +274,14 @@ export class ChatPanel {
         'ChatPanel'
       );
 
+      // 3. Объединяем: базовый промпт (настройки) + контекст проекта
+      // Настройки задают "личность и правила", контекст добавляет информацию о коде
+      const finalSystemPrompt = baseSystemPrompt
+        ? `${baseSystemPrompt}\n\n--- Контекст проекта ---\n\n${context.systemPrompt}`
+        : context.systemPrompt;
+
       const response = await this.llmProvider.generate(content, {
-        systemPrompt: context.systemPrompt,
+        systemPrompt: finalSystemPrompt,
       });
 
       logger.info('Получен ответ от LLM (токенов: ' + response.tokensUsed + ')', 'ChatPanel');
