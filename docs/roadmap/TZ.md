@@ -81,7 +81,7 @@
 ## Этап 1: Структурирование интервью (interview.json)
 
 **Что делаем:**
-1. Изменить `startInterview()` для создания `interview.json` вместо `interview.md`
+1. Изменить `startInterview()` для создания `interview.json` вместо `interview.json`
 2. Добавить интерфейс `InterviewData` с полями
 3. Добавить валидацию обязательных полей
 4. Обновить `handleRoadmap()` для чтения JSON

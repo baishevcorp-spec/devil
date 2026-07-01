@@ -33,7 +33,7 @@ interface ProjectAnalysis {
 
 export class CommandHandler {
   // Константы для файлов
-  private readonly INTERVIEW_FILENAME = 'interview.md';
+  private readonly INTERVIEW_FILENAME = 'interview.json';
   private readonly ROADMAP_FILENAME = 'roadmap.md';
 
   constructor(
@@ -222,6 +222,11 @@ export class CommandHandler {
       // 1. Анализ состояния проекта
       const analysis = await this.analyzeProjectState(project);
       const isProjectEmpty = analysis.totalFiles === 0;
+
+      // 🔍 ОТЛАДКА: логируем путь к интервью
+      logger.info('handleRoadmap: interviewPath=' + interviewPath, 'CommandHandler');
+      logger.info('handleRoadmap: project.devilPath=' + project.devilPath, 'CommandHandler');
+      logger.info('handleRoadmap: INTERVIEW_FILENAME=' + this.INTERVIEW_FILENAME, 'CommandHandler');
 
       // 2. Проверяем наличие файла интервью
       const hasInterview = await this.fileSystemService.fileExists(interviewPath);
