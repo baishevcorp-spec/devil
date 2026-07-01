@@ -15,6 +15,7 @@ import { MultiModelManager } from './services/MultiModelManager';
 import { ChatPanel } from './panels/ChatPanel';
 import { logger } from './utils/logger';
 import { DevPlanManager } from './services/DevPlanManager';
+import { DevPlanExecutor } from './services/DevPlanExecutor';
 
 let configManager: ConfigManager;
 let fileSystemService: FileSystemService;
@@ -29,6 +30,7 @@ let historyManager: HistoryManager;
 let userProfileManager: UserProfileManager;
 let multiModelManager: MultiModelManager;
 let devPlanManager: DevPlanManager;
+let devPlanExecutor: DevPlanExecutor;
 
 export function activate(context: vscode.ExtensionContext): void {
   logger.info('Devil extension is activating...', 'Extension');
@@ -60,6 +62,13 @@ export function activate(context: vscode.ExtensionContext): void {
       llmProvider,
       projectManager,
       contextBuilder
+    );
+
+    devPlanExecutor = new DevPlanExecutor(
+      fileSystemService,
+      llmProvider,
+      contextBuilder,
+      devPlanManager
     );
 
     const helloCommand = vscode.commands.registerCommand('devil.hello', () => {

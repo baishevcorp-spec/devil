@@ -429,7 +429,7 @@ var COMMANDS = [
   { name: '/dev generate', desc: 'Сгенерировать план разработки' },
   { name: '/dev next', desc: 'Выполнить следующий шаг плана' },
   { name: '/dev status', desc: 'Показать прогресс выполнения плана' },
-  { name: '/dev skip', desc: 'Пропустить шаг плана' },
+  { name: '/dev skip [id]', desc: 'Пропустить шаг плана' },
   { name: '/dev reset', desc: 'Сбросить план разработки' },
   { name: '/roadmap generate', desc: 'Сгенерировать Roadmap проекта' },
   { name: '/roadmap update', desc: 'Перегенерировать Roadmap с сохранением истории' },

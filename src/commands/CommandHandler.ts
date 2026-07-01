@@ -16,6 +16,7 @@ import { InterviewData, InterviewStatusData, validateInterview } from '../interf
 import { RoadmapParser } from '../utils/RoadmapParser';
 import { ChecklistSync } from '../utils/ChecklistSync';
 import { DevPlanManager } from '../services/DevPlanManager';
+import { DevPlanExecutor } from '../services/DevPlanExecutor';
 
 export interface CommandResult {
   success: boolean;
@@ -49,7 +50,8 @@ export class CommandHandler {
     private readonly searchIndex: SearchIndex,
     private readonly graphBuilder?: GraphBuilder,
     private readonly multiModelManager?: IMultiModelManager,
-    private readonly devPlanManager?: DevPlanManager
+    private readonly devPlanManager?: DevPlanManager,
+    private readonly devPlanExecutor?: DevPlanExecutor
   ) {
     logger.info('CommandHandler инициализирован', 'CommandHandler');
   }
@@ -149,20 +151,36 @@ export class CommandHandler {
       case '/test':
         return await this.handleTestGenerate(args, selectedCode);
       case '/dev':
-        if (args.length > 0 && args[0] === 'generate') {
-          return await this.handleDevGenerate();
+        if (args.length === 0) {
+          return {
+            success: false,
+            message:
+              'Использование:\n' +
+              '- `/dev generate` — сгенерировать план разработки\n' +
+              '- `/dev next` — выполнить следующий шаг\n' +
+              '- `/dev status` — показать прогресс\n' +
+              '- `/dev skip [id]` — пропустить шаг\n' +
+              '- `/dev reset` — сбросить план',
+          };
         }
-        return {
-          success: false,
-          message:
-            'Использование: /dev generate\n\n' +
-            'Генерирует план разработки на основе roadmap, checklist и интервью.\n\n' +
-            'Другие команды:\n' +
-            '- `/dev next` — выполнить следующий шаг\n' +
-            '- `/dev status` — показать прогресс\n' +
-            '- `/dev skip` — пропустить шаг\n' +
-            '- `/dev reset` — сбросить план',
-        };
+
+        switch (args[0]) {
+          case 'generate':
+            return await this.handleDevGenerate();
+          case 'next':
+            return await this.handleDevNext();
+          case 'status':
+            return await this.handleDevStatus();
+          case 'skip':
+            return await this.handleDevSkip(args);
+          case 'reset':
+            return await this.handleDevReset();
+          default:
+            return {
+              success: false,
+              message: `Неизвестная подкоманда: /dev ${args[0]}`,
+            };
+        }
       case '/help':
         return this.handleHelp();
       default:
@@ -1311,6 +1329,195 @@ export class CommandHandler {
     }
   }
 
+  private async handleDevNext(): Promise<CommandResult> {
+    if (!this.devPlanManager) {
+      return { success: false, message: '❌ DevPlanManager не инициализирован.' };
+    }
+    if (!this.devPlanExecutor) {
+      return { success: false, message: '❌ DevPlanExecutor не инициализирован.' };
+    }
+
+    const project = this.projectManager.getCurrentProject();
+    if (!project) {
+      return { success: false, message: 'Проект не открыт.' };
+    }
+
+    try {
+      await this.devPlanManager.initialize(project.path);
+      const result = await this.devPlanExecutor.executeNextStep(project.path);
+
+      if (!result.success) {
+        return { success: false, message: '❌ ' + result.error };
+      }
+
+      // Формируем сообщение с командами
+      let message = result.message + '\n\n';
+
+      if (result.commands && result.commands.length > 0) {
+        message += '**Команды для проверки:**\n```bash\n';
+        message += result.commands.join('\n');
+        message += '\n```\n\n';
+      }
+
+      if (result.backupPath) {
+        message += `📦 **Бэкап создан:** \`${result.backupPath}\`\n\n`;
+      }
+
+      // Показываем прогресс
+      const plan = this.devPlanManager.getCurrentPlan();
+      if (plan) {
+        message += `📊 **Прогресс:** ${plan.completedSteps}/${plan.totalSteps} шагов\n`;
+      }
+
+      return { success: true, message, data: result };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { success: false, message: 'Ошибка выполнения шага: ' + errorMessage };
+    }
+  }
+
+  private async handleDevStatus(): Promise<CommandResult> {
+    if (!this.devPlanManager) {
+      return { success: false, message: '❌ DevPlanManager не инициализирован.' };
+    }
+    if (!this.devPlanManager) {
+      return { success: false, message: '❌ DevPlanManager не инициализирован.' };
+    }
+
+    const project = this.projectManager.getCurrentProject();
+    if (!project) {
+      return { success: false, message: 'Проект не открыт.' };
+    }
+
+    try {
+      await this.devPlanManager.initialize(project.path);
+      const plan = this.devPlanManager.getCurrentPlan();
+
+      if (!plan) {
+        return {
+          success: false,
+          message: '📋 План разработки не найден. Выполните `/dev generate`.',
+        };
+      }
+
+      const lines: string[] = [];
+      lines.push('## 📊 Статус плана разработки\n');
+      lines.push(`**Статус:** ${plan.status}\n`);
+      lines.push(`**Прогресс:** ${plan.completedSteps}/${plan.totalSteps} шагов\n`);
+      lines.push('---\n');
+
+      // Группируем по статусу
+      const completed = plan.steps.filter((s) => s.status === 'completed');
+      const inProgress = plan.steps.filter((s) => s.status === 'in_progress');
+      const pending = plan.steps.filter((s) => s.status === 'pending');
+      const skipped = plan.steps.filter((s) => s.status === 'skipped');
+
+      if (completed.length > 0) {
+        lines.push('### ✅ Выполнено\n');
+        completed.forEach((s) => lines.push(`- [x] **Шаг ${s.id}:** ${s.path} — ${s.description}`));
+        lines.push('');
+      }
+
+      if (inProgress.length > 0) {
+        lines.push('### 🔄 В процессе\n');
+        inProgress.forEach((s) =>
+          lines.push(`- [ ] **Шаг ${s.id}:** ${s.path} — ${s.description}`)
+        );
+        lines.push('');
+      }
+
+      if (pending.length > 0) {
+        lines.push('### ⏳ Ожидает\n');
+        pending.forEach((s) => lines.push(`- [ ] **Шаг ${s.id}:** ${s.path} — ${s.description}`));
+        lines.push('');
+      }
+
+      if (skipped.length > 0) {
+        lines.push('### ⏭️ Пропущено\n');
+        skipped.forEach((s) => lines.push(`- [ ] **Шаг ${s.id}:** ${s.path} — ${s.description}`));
+        lines.push('');
+      }
+
+      return { success: true, message: lines.join('\n'), data: plan };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { success: false, message: 'Ошибка получения статуса: ' + errorMessage };
+    }
+  }
+
+  private async handleDevSkip(args: string[]): Promise<CommandResult> {
+    if (!this.devPlanManager) {
+      return { success: false, message: '❌ DevPlanManager не инициализирован.' };
+    }
+    if (!this.devPlanManager) {
+      return { success: false, message: '❌ DevPlanManager не инициализирован.' };
+    }
+
+    const project = this.projectManager.getCurrentProject();
+    if (!project) {
+      return { success: false, message: 'Проект не открыт.' };
+    }
+
+    try {
+      await this.devPlanManager.initialize(project.path);
+      const plan = this.devPlanManager.getCurrentPlan();
+
+      if (!plan) {
+        return { success: false, message: '📋 План разработки не найден.' };
+      }
+
+      // Определяем, какой шаг пропустить
+      let stepId: number;
+      if (args.length > 0 && args[0] === 'skip' && args[1]) {
+        stepId = parseInt(args[1], 10);
+      } else {
+        const nextStep = this.devPlanManager.getNextStep();
+        if (!nextStep) {
+          return { success: false, message: 'Нет шагов для пропуска.' };
+        }
+        stepId = nextStep.id;
+      }
+
+      await this.devPlanManager.updateStepStatus(stepId, 'skipped');
+
+      return {
+        success: true,
+        message: `⏭️ Шаг ${stepId} пропущен.\n\n📊 **Прогресс:** ${plan.completedSteps}/${plan.totalSteps} шагов`,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { success: false, message: 'Ошибка пропуска шага: ' + errorMessage };
+    }
+  }
+
+  private async handleDevReset(): Promise<CommandResult> {
+    if (!this.devPlanManager) {
+      return { success: false, message: '❌ DevPlanManager не инициализирован.' };
+    }
+    if (!this.devPlanManager) {
+      return { success: false, message: '❌ DevPlanManager не инициализирован.' };
+    }
+
+    const project = this.projectManager.getCurrentProject();
+    if (!project) {
+      return { success: false, message: 'Проект не открыт.' };
+    }
+
+    try {
+      await this.devPlanManager.initialize(project.path);
+      await this.devPlanManager.resetPlan();
+
+      return {
+        success: true,
+        message:
+          '🔄 План разработки сброшен.\n\nИспользуйте `/dev generate` для создания нового плана.',
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { success: false, message: 'Ошибка сброса плана: ' + errorMessage };
+    }
+  }
+
   /**
    * Форматирует план для отображения в чате.
    */
@@ -2028,7 +2235,7 @@ export class CommandHandler {
       '- `/dev generate` — сгенерировать план разработки',
       '- `/dev next` — выполнить следующий шаг плана',
       '- `/dev status` — показать прогресс выполнения плана',
-      '- `/dev skip` — пропустить шаг плана',
+      '- `/dev skip [id]` — пропустить шаг плана',
       '- `/dev reset` — сбросить план разработки',
       '- `/checklist generate` — сгенерировать чек-лист на основе roadmap.md',
       '- `/checklist sync` — синхронизировать чек-лист с реальной структурой проекта',

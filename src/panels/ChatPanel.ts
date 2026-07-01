@@ -12,6 +12,7 @@ import { IMultiModelManager } from '../interfaces/IMultiModelManager';
 import { HistoryManager } from '../services/HistoryManager';
 import { ConfigManager } from '../services/ConfigManager';
 import { DevPlanManager } from '../services/DevPlanManager';
+import { DevPlanExecutor } from '../services/DevPlanExecutor';
 import { CommandHandler } from '../commands/CommandHandler';
 import { getUserFriendlyMessage } from '../utils/errors';
 
@@ -62,7 +63,8 @@ export class ChatPanel {
     graphBuilder?: GraphBuilder,
     multiModelManager?: IMultiModelManager,
     configManager?: ConfigManager,
-    devPlanManager?: DevPlanManager
+    devPlanManager?: DevPlanManager,
+    devPlanExecutor?: DevPlanExecutor
   ): ChatPanel {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
@@ -101,7 +103,8 @@ export class ChatPanel {
       graphBuilder,
       multiModelManager,
       configManager || new ConfigManager(),
-      devPlanManager
+      devPlanManager,
+      devPlanExecutor
     );
     return ChatPanel.currentPanel;
   }
@@ -120,7 +123,8 @@ export class ChatPanel {
     graphBuilder?: GraphBuilder,
     multiModelManager?: IMultiModelManager,
     configManager?: ConfigManager,
-    devPlanManager?: DevPlanManager
+    devPlanManager?: DevPlanManager,
+    devPlanExecutor?: DevPlanExecutor
   ) {
     this._panel = panel;
     this._extensionUri = extensionUri;
@@ -144,7 +148,8 @@ export class ChatPanel {
       this.searchIndex,
       graphBuilder,
       multiModelManager,
-      devPlanManager
+      devPlanManager,
+      devPlanExecutor
     );
 
     this._initializeHistory();
