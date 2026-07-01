@@ -15,6 +15,7 @@ import * as path from 'path';
 import { InterviewData, InterviewStatusData, validateInterview } from '../interfaces/IInterview';
 import { RoadmapParser } from '../utils/RoadmapParser';
 import { ChecklistSync } from '../utils/ChecklistSync';
+import { DevPlanManager } from '../services/DevPlanManager';
 
 export interface CommandResult {
   success: boolean;
@@ -47,11 +48,11 @@ export class CommandHandler {
     private readonly gitService: GitService,
     private readonly searchIndex: SearchIndex,
     private readonly graphBuilder?: GraphBuilder,
-    private readonly multiModelManager?: IMultiModelManager
+    private readonly multiModelManager?: IMultiModelManager,
+    private readonly devPlanManager?: DevPlanManager
   ) {
     logger.info('CommandHandler инициализирован', 'CommandHandler');
   }
-
 
   private async safeExecute<T>(
     operation: () => Promise<T>,
@@ -62,22 +63,26 @@ export class CommandHandler {
       return {
         success: true,
         message: typeof result === 'string' ? result : JSON.stringify(result),
-        data: result
+        data: result,
       };
     } catch (error) {
       const errorHandler = ErrorHandler.getInstance();
       const devilError = errorHandler.classifyError(error);
 
-      logger.error('Error in ' + context, {
-        error: devilError.message,
-        type: devilError.type,
-        details: devilError.details
-      }, 'CommandHandler');
+      logger.error(
+        'Error in ' + context,
+        {
+          error: devilError.message,
+          type: devilError.type,
+          details: devilError.details,
+        },
+        'CommandHandler'
+      );
 
       return {
         success: false,
         message: devilError.userMessage,
-        data: { errorType: devilError.type }
+        data: { errorType: devilError.type },
       };
     }
   }
@@ -143,6 +148,21 @@ export class CommandHandler {
         return await this.handleRefactor(args, selectedCode);
       case '/test':
         return await this.handleTestGenerate(args, selectedCode);
+      case '/dev':
+        if (args.length > 0 && args[0] === 'generate') {
+          return await this.handleDevGenerate();
+        }
+        return {
+          success: false,
+          message:
+            'Использование: /dev generate\n\n' +
+            'Генерирует план разработки на основе roadmap, checklist и интервью.\n\n' +
+            'Другие команды:\n' +
+            '- `/dev next` — выполнить следующий шаг\n' +
+            '- `/dev status` — показать прогресс\n' +
+            '- `/dev skip` — пропустить шаг\n' +
+            '- `/dev reset` — сбросить план',
+        };
       case '/help':
         return this.handleHelp();
       default:
@@ -288,8 +308,9 @@ export class CommandHandler {
         } catch (parseError) {
           return {
             success: false,
-            message: '📄 Ошибка чтения `.devil/interview.json`: файл не является валидным JSON.\n\n' +
-                     'Проверьте синтаксис файла и попробуйте снова.'
+            message:
+              '📄 Ошибка чтения `.devil/interview.json`: файл не является валидным JSON.\n\n' +
+              'Проверьте синтаксис файла и попробуйте снова.',
           };
         }
       }
@@ -424,7 +445,7 @@ export class CommandHandler {
           path: roadmapPath,
           content: response.content,
           backupPath,
-          version: versionNumber + 1
+          version: versionNumber + 1,
         },
       };
     } catch (error) {
@@ -441,7 +462,7 @@ export class CommandHandler {
    */
   private async getNextVersionNumber(devilPath: string): Promise<number> {
     const files = await this.fileSystemService.scanDirectory(devilPath, {
-      excludePatterns: []
+      excludePatterns: [],
     });
 
     let maxVersion = 0;
@@ -478,7 +499,7 @@ export class CommandHandler {
         targetAudience: '',
         deadlines: '',
         constraints: [],
-        additionalInfo: ''
+        additionalInfo: '',
       };
 
       const interviewContent = JSON.stringify(interviewTemplate, null, 2);
@@ -489,7 +510,7 @@ export class CommandHandler {
         status: 'pending',
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        interviewFile: 'interview.json'
+        interviewFile: 'interview.json',
       };
       await this.fileSystemService.writeFile(statusPath, JSON.stringify(statusData, null, 2));
 
@@ -510,13 +531,13 @@ export class CommandHandler {
       return {
         success: true,
         message,
-        data: { path: interviewPath, statusPath }
+        data: { path: interviewPath, statusPath },
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        message: 'Ошибка создания интервью: ' + errorMessage
+        message: 'Ошибка создания интервью: ' + errorMessage,
       };
     }
   }
@@ -546,17 +567,17 @@ export class CommandHandler {
       status,
       createdAt: current?.createdAt || Date.now(),
       updatedAt: Date.now(),
-      interviewFile: 'interview.json'
+      interviewFile: 'interview.json',
     };
 
-    await this.fileSystemService.writeFile(
-      statusPath,
-      JSON.stringify(updated, null, 2)
-    );
+    await this.fileSystemService.writeFile(statusPath, JSON.stringify(updated, null, 2));
     logger.info(`Статус интервью обновлён: ${status}`, 'CommandHandler');
   }
 
-  private async analyzeProjectState(project: { path: string; structure?: unknown }): Promise<ProjectAnalysis> {
+  private async analyzeProjectState(project: {
+    path: string;
+    structure?: unknown;
+  }): Promise<ProjectAnalysis> {
     // Считаем файлы в проекте
     const allFiles = this.countProjectFiles(project.structure as { children?: unknown[] });
 
@@ -603,7 +624,10 @@ export class CommandHandler {
     };
   }
 
-  private async buildRoadmapContext(_project: { path: string }, analysis: ProjectAnalysis): Promise<{ systemPrompt: string }> {
+  private async buildRoadmapContext(
+    _project: { path: string },
+    analysis: ProjectAnalysis
+  ): Promise<{ systemPrompt: string }> {
     // Определяем, сколько информации включать в контекст
     const includeOptions = {
       includeProjectStructure: analysis.totalFiles > 0,
@@ -619,24 +643,22 @@ export class CommandHandler {
     return await this.contextBuilder.buildContext(userQuery, includeOptions);
   }
 
-    private buildRoadmapPrompt(
-    context: any,
-    interviewData: InterviewData | null
-  ): string {
+  private buildRoadmapPrompt(context: any, interviewData: InterviewData | null): string {
     let prompt = 'Ты — опытный архитектор программного обеспечения. ';
 
     if (interviewData) {
-      prompt += 'Создай детальный план проекта на основе следующей информации:\n\n' +
+      prompt +=
+        'Создай детальный план проекта на основе следующей информации:\n\n' +
         '## Информация о проекте\n\n' +
         `**Название:** ${interviewData.projectName}\n\n` +
         `**Описание:** ${interviewData.description}\n\n` +
-        `**Цели:**\n${interviewData.goals.map(g => `- ${g}`).join('\n')}\n\n` +
+        `**Цели:**\n${interviewData.goals.map((g) => `- ${g}`).join('\n')}\n\n` +
         `**Технологии:** ${interviewData.techStack.join(', ')}\n\n` +
         `**Целевая аудитория:** ${interviewData.targetAudience}\n\n` +
         `**Сроки:** ${interviewData.deadlines}\n\n`;
 
       if (interviewData.constraints.length > 0) {
-        prompt += `**Ограничения:**\n${interviewData.constraints.map(c => `- ${c}`).join('\n')}\n\n`;
+        prompt += `**Ограничения:**\n${interviewData.constraints.map((c) => `- ${c}`).join('\n')}\n\n`;
       }
 
       if (interviewData.additionalInfo) {
@@ -646,7 +668,8 @@ export class CommandHandler {
       prompt += 'Создай детальный план проекта на основе структуры файлов.\n\n';
     }
 
-    prompt += `## Структура проекта\n\n${context.systemPrompt}\n\n` +
+    prompt +=
+      `## Структура проекта\n\n${context.systemPrompt}\n\n` +
       '## Требования к Roadmap\n\n' +
       '1. Разбей проект на этапы (фазы)\n' +
       '2. Для каждого этапа укажи:\n' +
@@ -709,7 +732,8 @@ export class CommandHandler {
     if (args.length === 0 || args[0] !== 'generate') {
       return {
         success: false,
-        message: 'Использование: /checklist generate\n\nСгенерирует чек-лист файлов проекта на основе roadmap.md.',
+        message:
+          'Использование: /checklist generate\n\nСгенерирует чек-лист файлов проекта на основе roadmap.md.',
       };
     }
 
@@ -731,7 +755,10 @@ export class CommandHandler {
         roadmapContent = await this.fileSystemService.readFile(roadmapPath);
         logger.info('Roadmap найден и будет использован для генерации чек-листа', 'CommandHandler');
       } else {
-        logger.warn('Roadmap не найден. Чек-лист будет сгенерирован на основе структуры проекта', 'CommandHandler');
+        logger.warn(
+          'Roadmap не найден. Чек-лист будет сгенерирован на основе структуры проекта',
+          'CommandHandler'
+        );
       }
 
       // 2. Парсим roadmap (если есть)
@@ -749,7 +776,8 @@ export class CommandHandler {
       });
 
       // 4. Формируем промпт
-      let prompt = 'Ты — опытный разработчик. Создай чек-лист файлов проекта в формате Markdown.\n\n';
+      let prompt =
+        'Ты — опытный разработчик. Создай чек-лист файлов проекта в формате Markdown.\n\n';
 
       if (roadmapPrompt) {
         prompt += '## Roadmap проекта\n\n' + roadmapPrompt + '\n\n';
@@ -779,7 +807,10 @@ export class CommandHandler {
 
       if (validationReport.updated) {
         checklistContent = validationReport.content;
-        logger.info(`Валидация путей: обновлено ${validationReport.markedExisting} существующих файлов`, 'CommandHandler');
+        logger.info(
+          `Валидация путей: обновлено ${validationReport.markedExisting} существующих файлов`,
+          'CommandHandler'
+        );
       }
 
       // 7. Сохраняем чек-лист
@@ -902,7 +933,7 @@ export class CommandHandler {
       content: lines.join('\n'),
       markedExisting,
       totalFiles,
-      updated
+      updated,
     };
   }
 
@@ -981,11 +1012,15 @@ export class CommandHandler {
     }
   }
 
-  private async handleRefactor(args: string[], selectedCode: string | null): Promise<CommandResult> {
+  private async handleRefactor(
+    args: string[],
+    selectedCode: string | null
+  ): Promise<CommandResult> {
     if (args.length === 0) {
       return {
         success: false,
-        message: 'Использование: /refactor <путь_к_файлу>\n\nПример: /refactor src/services/UserService.ts\n\nАгент проанализирует код и предложит улучшения (SOLID, паттерны, качество).',
+        message:
+          'Использование: /refactor <путь_к_файлу>\n\nПример: /refactor src/services/UserService.ts\n\nАгент проанализирует код и предложит улучшения (SOLID, паттерны, качество).',
       };
     }
 
@@ -1023,9 +1058,19 @@ export class CommandHandler {
 
       const prompt =
         'Ты — опытный разработчик и эксперт по рефакторингу. Проанализируй следующий код и предложи улучшения.\n\n' +
-        'Файл: ' + filePath + ' (' + codeLabel + ')\n' +
-        'Язык: ' + language + '\n\n' +
-        '```' + language + '\n' + codeToRefactor + '\n```\n\n' +
+        'Файл: ' +
+        filePath +
+        ' (' +
+        codeLabel +
+        ')\n' +
+        'Язык: ' +
+        language +
+        '\n\n' +
+        '```' +
+        language +
+        '\n' +
+        codeToRefactor +
+        '\n```\n\n' +
         'Выполни следующие шаги:\n\n' +
         '## 1. Анализ проблем\n' +
         'Найди проблемы в коде:\n' +
@@ -1037,7 +1082,9 @@ export class CommandHandler {
         '- Проблемы с типизацией (если TypeScript)\n' +
         '- Неоптимальные алгоритмы\n\n' +
         '## 2. Улучшенная версия\n' +
-        'Предложи полностью улучшенную версию кода в блоке ```' + language + '.\n' +
+        'Предложи полностью улучшенную версию кода в блоке ```' +
+        language +
+        '.\n' +
         'Сохрани функциональность, но улучши:\n' +
         '- Читаемость и структуру\n' +
         '- Применение паттернов проектирования (если уместно)\n' +
@@ -1076,7 +1123,10 @@ export class CommandHandler {
     }
   }
 
-  private async handleTestGenerate(args: string[], selectedCode: string | null): Promise<CommandResult> {
+  private async handleTestGenerate(
+    args: string[],
+    selectedCode: string | null
+  ): Promise<CommandResult> {
     // Нормализация: если первый аргумент "generate", убираем его
     if (args.length > 0 && args[0].toLowerCase() === 'generate') {
       args = args.slice(1);
@@ -1085,7 +1135,8 @@ export class CommandHandler {
     if (args.length === 0) {
       return {
         success: false,
-        message: 'Использование: /test generate <путь_к_файлу> (или /test <путь>)\n\nПример: /test generate src/services/ConfigManager.ts\n\nАгент сгенерирует юнит-тесты для файла или функции.',
+        message:
+          'Использование: /test generate <путь_к_файлу> (или /test <путь>)\n\nПример: /test generate src/services/ConfigManager.ts\n\nАгент сгенерирует юнит-тесты для файла или функции.',
       };
     }
 
@@ -1126,10 +1177,22 @@ export class CommandHandler {
 
       const prompt =
         'Ты — опытный разработчик, специализирующийся на тестировании. Сгенерируй юнит-тесты для следующего кода.\n\n' +
-        'Файл: ' + filePath + ' (' + codeLabel + ')\n' +
-        'Язык: ' + language + '\n' +
-        'Фреймворк тестирования: ' + testFramework + '\n\n' +
-        '```' + language + '\n' + codeToTest + '\n```\n\n' +
+        'Файл: ' +
+        filePath +
+        ' (' +
+        codeLabel +
+        ')\n' +
+        'Язык: ' +
+        language +
+        '\n' +
+        'Фреймворк тестирования: ' +
+        testFramework +
+        '\n\n' +
+        '```' +
+        language +
+        '\n' +
+        codeToTest +
+        '\n```\n\n' +
         'Выполни следующие шаги:\n\n' +
         '## 1. Анализ кода\n' +
         'Определи:\n' +
@@ -1138,9 +1201,15 @@ export class CommandHandler {
         '- Какие edge cases нужно учесть\n' +
         '- Какие сценарии покрытия (happy path, error cases, boundary values)\n\n' +
         '## 2. Генерация тестов\n' +
-        'Создай полный файл тестов в блоке ```' + this.getTestFileExtension(testFramework) + ':\n' +
-        '- Используй синтаксис ' + testFramework + '\n' +
-        '- Следуй best practices ' + testFramework + '\n' +
+        'Создай полный файл тестов в блоке ```' +
+        this.getTestFileExtension(testFramework) +
+        ':\n' +
+        '- Используй синтаксис ' +
+        testFramework +
+        '\n' +
+        '- Следуй best practices ' +
+        testFramework +
+        '\n' +
         '- Покрой основные сценарии:\n' +
         '  * Happy path (успешные сценарии)\n' +
         '  * Error cases (ошибки, исключения)\n' +
@@ -1178,6 +1247,116 @@ export class CommandHandler {
         message: 'Ошибка генерации тестов: ' + errorMessage,
       };
     }
+  }
+
+  private async handleDevGenerate(): Promise<CommandResult> {
+    if (!this.devPlanManager) {
+      return {
+        success: false,
+        message: '❌ DevPlanManager не инициализирован.',
+      };
+    }
+
+    const project = this.projectManager.getCurrentProject();
+    if (!project) {
+      return {
+        success: false,
+        message: 'Проект не открыт.',
+      };
+    }
+
+    try {
+      // Инициализируем DevPlanManager для текущего проекта
+      await this.devPlanManager.initialize(project.path);
+
+      // Проверяем, есть ли уже план
+      const existingPlan = this.devPlanManager.getCurrentPlan();
+      if (existingPlan) {
+        return {
+          success: false,
+          message:
+            '📋 План разработки уже существует.\n\n' +
+            `**Статус:** ${existingPlan.completedSteps}/${existingPlan.totalSteps} шагов выполнено\n\n` +
+            'Используйте команды:\n' +
+            '- `/dev next` — выполнить следующий шаг\n' +
+            '- `/dev status` — показать прогресс\n' +
+            '- `/dev reset` — сбросить план и создать новый',
+        };
+      }
+
+      // Генерируем новый план
+      const result = await this.devPlanManager.generatePlan();
+
+      if (!result.success || !result.plan) {
+        return {
+          success: false,
+          message: '❌ Ошибка генерации плана: ' + (result.error || 'неизвестная ошибка'),
+        };
+      }
+
+      // Формируем красивое сообщение с планом
+      const planMessage = this.formatPlanForChat(result.plan);
+
+      return {
+        success: true,
+        message: planMessage,
+        data: { plan: result.plan },
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: 'Ошибка генерации плана: ' + errorMessage,
+      };
+    }
+  }
+
+  /**
+   * Форматирует план для отображения в чате.
+   */
+  private formatPlanForChat(plan: import('../interfaces/IDevPlan').DevPlan): string {
+    const lines: string[] = [];
+
+    lines.push('✅ **План разработки сгенерирован**\n');
+    lines.push(`📊 **Статус:** ${plan.completedSteps}/${plan.totalSteps} шагов выполнено\n`);
+    lines.push('---\n');
+
+    // Группируем шаги по типу
+    const directories = plan.steps.filter((s) => s.type === 'create_directory');
+    const files = plan.steps.filter((s) => s.type === 'create_file' || s.type === 'modify_file');
+
+    if (directories.length > 0) {
+      lines.push('## 📁 Создание структуры директорий\n');
+      directories.forEach((step) => {
+        const checkbox = step.status === 'completed' ? '[x]' : '[ ]';
+        lines.push(`- ${checkbox} **Шаг ${step.id}:** \`${step.path}\` — ${step.description}`);
+      });
+      lines.push('');
+    }
+
+    if (files.length > 0) {
+      lines.push('## 📄 Создание файлов\n');
+      files.forEach((step) => {
+        const checkbox = step.status === 'completed' ? '[x]' : '[ ]';
+        const deps =
+          step.dependencies && step.dependencies.length > 0
+            ? ` (зависит от: ${step.dependencies.join(', ')})`
+            : '';
+        lines.push(
+          `- ${checkbox} **Шаг ${step.id}:** \`${step.path}\` — ${step.description}${deps}`
+        );
+      });
+      lines.push('');
+    }
+
+    lines.push('---\n');
+    lines.push('💡 **Команды для управления планом:**\n');
+    lines.push('- `/dev next` — выполнить следующий шаг');
+    lines.push('- `/dev status` — показать прогресс');
+    lines.push('- `/dev skip` — пропустить шаг');
+    lines.push('- `/dev reset` — сбросить план');
+
+    return lines.join('\n');
   }
 
   /**
@@ -1321,14 +1500,15 @@ export class CommandHandler {
           project_path: project.path,
           action: 'search_hit',
           target: query,
-          description: 'Поиск: ' + results.length + ' совпадений в ' + Object.keys(byFile).length + ' файлах',
+          description:
+            'Поиск: ' + results.length + ' совпадений в ' + Object.keys(byFile).length + ' файлах',
           metadata: {
             query,
             totalResults: results.length,
             fileCount: Object.keys(byFile).length,
             files: Object.keys(byFile),
-            duration
-          }
+            duration,
+          },
         });
         logger.info('Результаты поиска сохранены в change_log', 'CommandHandler');
       } catch (logError) {
@@ -1687,7 +1867,7 @@ export class CommandHandler {
       return {
         success: false,
         message: '❌ MultiModelManager не инициализирован. Обратитесь к администратору.',
-        data: {}
+        data: {},
       };
     }
 
@@ -1706,7 +1886,7 @@ export class CommandHandler {
           return {
             success: false,
             message: '❌ Нет настроенных моделей. Добавьте модели в settings.json (devil.models).',
-            data: { models: [] }
+            data: { models: [] },
           };
         }
 
@@ -1726,7 +1906,7 @@ export class CommandHandler {
         return {
           success: true,
           message,
-          data: { models, currentId }
+          data: { models, currentId },
         };
       }
 
@@ -1743,14 +1923,14 @@ export class CommandHandler {
         return {
           success: true,
           message: `✅ Модель переключена на **${currentModel?.name}** (\`${currentModel?.model}\`).`,
-          data: { switchedTo: modelId, model: currentModel }
+          data: { switchedTo: modelId, model: currentModel },
         };
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         return {
           success: false,
           message: `❌ Ошибка переключения модели: ${errorMessage}`,
-          data: {}
+          data: {},
         };
       }
     }
@@ -1763,7 +1943,7 @@ export class CommandHandler {
         return {
           success: false,
           message: '❌ Нет активной модели.',
-          data: {}
+          data: {},
         };
       }
 
@@ -1777,18 +1957,19 @@ export class CommandHandler {
       return {
         success: true,
         message,
-        data: { currentModel }
+        data: { currentModel },
       };
     }
 
     // Неизвестная подкоманда — показать подсказку
     return {
       success: false,
-      message: '## Использование команды /model\n\n' +
+      message:
+        '## Использование команды /model\n\n' +
         '- `/model switch` — показать список моделей\n' +
         '- `/model switch <id>` — переключиться на модель\n' +
         '- `/model current` — показать текущую активную модель\n',
-      data: {}
+      data: {},
     };
   }
 
@@ -1814,14 +1995,15 @@ export class CommandHandler {
       await this.searchIndex.clear();
       await this.searchIndex.buildIndex();
 
-
-
       return {
         success: true,
-        message: '✅ Графовая память очищена (' + deletedNodes + ' узлов удалено).\n\n' +
+        message:
+          '✅ Графовая память очищена (' +
+          deletedNodes +
+          ' узлов удалено).\n\n' +
           'Индекс поиска перестроен.\n' +
           'Для перестроения графа закройте и снова откройте проект командой "Devil: Open Project".',
-        data: { deletedNodes }
+        data: { deletedNodes },
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -1842,7 +2024,12 @@ export class CommandHandler {
       '',
       '**Анализ кода:**',
       '- `/refactor <путь>` — предложить рефакторинг кода (SOLID, паттерны)',
-            '**Генерация:**',
+      '**Генерация:**',
+      '- `/dev generate` — сгенерировать план разработки',
+      '- `/dev next` — выполнить следующий шаг плана',
+      '- `/dev status` — показать прогресс выполнения плана',
+      '- `/dev skip` — пропустить шаг плана',
+      '- `/dev reset` — сбросить план разработки',
       '- `/checklist generate` — сгенерировать чек-лист на основе roadmap.md',
       '- `/checklist sync` — синхронизировать чек-лист с реальной структурой проекта',
       '- `/test generate <путь>` или `/test <путь>` — сгенерировать юнит-тесты для файла',
@@ -1974,7 +2161,9 @@ export class CommandHandler {
           stdout = (execError as { stdout: string }).stdout;
           stderr = (execError as { stderr?: string }).stderr || '';
           logger.info(
-            'ESLint нашёл проблемы (exit code ' + (execError as { code?: number }).code + '), парсим вывод',
+            'ESLint нашёл проблемы (exit code ' +
+              (execError as { code?: number }).code +
+              '), парсим вывод',
             'CommandHandler'
           );
         } else {
@@ -2103,13 +2292,13 @@ export class CommandHandler {
               totalWarnings,
               fileCount: lintResults.length,
               files: lintResults
-                .filter(r => r.messages.length > 0)
-                .map(r => ({
+                .filter((r) => r.messages.length > 0)
+                .map((r) => ({
                   file: path.relative(project.path, r.filePath),
                   errors: r.errorCount,
-                  warnings: r.warningCount
-                }))
-            }
+                  warnings: r.warningCount,
+                })),
+            },
           });
           logger.info('Результаты линтинга сохранены в change_log', 'CommandHandler');
         } catch (logError) {
@@ -2120,7 +2309,8 @@ export class CommandHandler {
       return {
         success: true,
         message: lines.join('\n'),
-        data: { target: targetPath,
+        data: {
+          target: targetPath,
           results: lintResults,
           summary: { totalErrors, totalWarnings, fileCount: lintResults.length },
         },

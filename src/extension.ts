@@ -14,7 +14,7 @@ import { UserProfileManager } from './services/UserProfileManager';
 import { MultiModelManager } from './services/MultiModelManager';
 import { ChatPanel } from './panels/ChatPanel';
 import { logger } from './utils/logger';
-
+import { DevPlanManager } from './services/DevPlanManager';
 
 let configManager: ConfigManager;
 let fileSystemService: FileSystemService;
@@ -28,6 +28,7 @@ let graphBuilder: GraphBuilder;
 let historyManager: HistoryManager;
 let userProfileManager: UserProfileManager;
 let multiModelManager: MultiModelManager;
+let devPlanManager: DevPlanManager;
 
 export function activate(context: vscode.ExtensionContext): void {
   logger.info('Devil extension is activating...', 'Extension');
@@ -47,12 +48,18 @@ export function activate(context: vscode.ExtensionContext): void {
     userProfileManager = new UserProfileManager(memoryStore);
     multiModelManager = new MultiModelManager(configManager);
 
-
     contextBuilder = new ContextBuilder(
       projectManager,
       fileSystemService,
       memoryStore,
       userProfileManager
+    );
+
+    devPlanManager = new DevPlanManager(
+      fileSystemService,
+      llmProvider,
+      projectManager,
+      contextBuilder
     );
 
     const helloCommand = vscode.commands.registerCommand('devil.hello', () => {
@@ -72,7 +79,8 @@ export function activate(context: vscode.ExtensionContext): void {
         searchIndex,
         graphBuilder,
         multiModelManager,
-        configManager
+        configManager,
+        devPlanManager
       );
     });
 
@@ -105,14 +113,14 @@ export function activate(context: vscode.ExtensionContext): void {
             logger.info('Запуск индексации: ' + files.length + ' файлов', 'Extension');
 
             // Индексируем код для быстрого поиска
-            searchIndex.buildIndexFromTree(files).catch(err =>
-              logger.error('Ошибка индексации', err, 'Extension')
-            );
+            searchIndex
+              .buildIndexFromTree(files)
+              .catch((err) => logger.error('Ошибка индексации', err, 'Extension'));
 
             // Строим графовую память
-            graphBuilder.parseProject(folder.uri.fsPath, files).catch(err =>
-              logger.error('Ошибка построения графа', err, 'Extension')
-            );
+            graphBuilder
+              .parseProject(folder.uri.fsPath, files)
+              .catch((err) => logger.error('Ошибка построения графа', err, 'Extension'));
           } else {
             logger.warn('Структура проекта пуста, индекс и граф не будут построены', 'Extension');
           }
@@ -120,9 +128,11 @@ export function activate(context: vscode.ExtensionContext): void {
           // Подписываемся на изменения файлов для инкрементального обновления графа
           projectManager.onFileChanged(async (event) => {
             if (event.type === 'created' || event.type === 'changed') {
-              graphBuilder.updateForFile(event.path, folder.uri.fsPath).catch(err =>
-                logger.error('Ошибка обновления графа для файла', err, 'Extension')
-              );
+              graphBuilder
+                .updateForFile(event.path, folder.uri.fsPath)
+                .catch((err) =>
+                  logger.error('Ошибка обновления графа для файла', err, 'Extension')
+                );
             } else if (event.type === 'deleted') {
               // При удалении файла граф обновится при следующем scan
               logger.info('Файл удалён: ' + event.path, 'Extension');
@@ -202,15 +212,16 @@ export function activate(context: vscode.ExtensionContext): void {
           searchIndex,
           graphBuilder,
           multiModelManager,
-          configManager
+          configManager,
+          devPlanManager
         );
 
         const filePath = editor.document.fileName;
         const project = projectManager.getCurrentProject();
         let relativePath = filePath;
-      if (project) {
-        relativePath = path.relative(project.path, filePath);
-        relativePath = relativePath.split(path.sep).join('/');
+        if (project) {
+          relativePath = path.relative(project.path, filePath);
+          relativePath = relativePath.split(path.sep).join('/');
         }
 
         const command = '/explain ' + relativePath + ' --- ' + selectedText.replace(/\n/g, ' ');
