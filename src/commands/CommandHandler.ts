@@ -236,6 +236,9 @@ export class CommandHandler {
         return await this.startInterview(project);
       }
 
+      // 3.5 Проверяем статус интервью
+      const interviewStatus = await this.getInterviewStatus(project);
+
       // 4. Если проект пустой, но интервью есть — читаем JSON
       let interviewData: InterviewData | null = null;
       if (isProjectEmpty && hasInterview) {
@@ -258,6 +261,8 @@ export class CommandHandler {
             };
           }
           interviewData = parsed;
+          // Обновляем статус на 'filled'
+          await this.updateInterviewStatus(project, 'filled');
         } catch (parseError) {
           return {
             success: false,
@@ -291,6 +296,9 @@ export class CommandHandler {
 
       // Сохраняем roadmap
       await this.fileSystemService.writeFile(roadmapPath, response.content);
+
+      // Обновляем статус на 'roadmap_generated'
+      await this.updateInterviewStatus(project, 'roadmap_generated');
 
       return {
         success: true,
@@ -363,29 +371,39 @@ export class CommandHandler {
     }
   }
 
-  // ---------- Промпт для генерации вопросов интервью ----------
-  private buildInterviewPrompt(analysis: ProjectAnalysis): string {
-    return `
-Ты — опытный технический директор. Проект только начинается, и нужно собрать требования.
+  private async getInterviewStatus(project: any): Promise<InterviewStatusData | null> {
+    const statusPath = path.join(project.devilPath, '.interview_status.json');
+    const exists = await this.fileSystemService.fileExists(statusPath);
+    if (!exists) return null;
 
-Проанализируй следующую информацию (она минимальна):
-- Технология (определена предположительно): ${analysis.technology}
-- Проект пустой, нет ни одного файла.
+    try {
+      const content = await this.fileSystemService.readFile(statusPath);
+      return JSON.parse(content) as InterviewStatusData;
+    } catch (error) {
+      logger.warn('Не удалось прочитать .interview_status.json', 'CommandHandler');
+      return null;
+    }
+  }
 
-Твоя задача — **задать 5–7 конкретных вопросов**, которые помогут сформировать дорожную карту.
-Вопросы должны касаться:
-- Цели проекта и бизнес-задачи
-- Целевая аудитория
-- SMART цели
-- Основной функционал (MVP)
-- Технические ограничения (стек, инфраструктура)
-- Сроки и бюджет (если применимо)
-- Команда и роли
+  private async updateInterviewStatus(
+    project: any,
+    status: InterviewStatusData['status']
+  ): Promise<void> {
+    const statusPath = path.join(project.devilPath, '.interview_status.json');
+    const current = await this.getInterviewStatus(project);
 
-Формат ответа: просто список вопросов с нумерацией (1., 2., ...).
-Не добавляй лишнего текста, только вопросы.
-Отвечай на русском языке.
-`;
+    const updated: InterviewStatusData = {
+      status,
+      createdAt: current?.createdAt || Date.now(),
+      updatedAt: Date.now(),
+      interviewFile: 'interview.json'
+    };
+
+    await this.fileSystemService.writeFile(
+      statusPath,
+      JSON.stringify(updated, null, 2)
+    );
+    logger.info(`Статус интервью обновлён: ${status}`, 'CommandHandler');
   }
 
   private async analyzeProjectState(project: { path: string; structure?: unknown }): Promise<ProjectAnalysis> {
