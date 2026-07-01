@@ -274,7 +274,7 @@ export class ChatPanel {
         includeProjectStructure: true,
         includeRoadmap: true,
         includeChecklist: true,
-        includeMemoryGraph: false,
+        includeMemoryGraph: true,
       });
 
       logger.info(
