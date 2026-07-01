@@ -9,6 +9,7 @@ export interface ParseResult {
 }
 
 export class GraphBuilder {
+  private isUpdating: boolean = false;
   constructor(
     private readonly fileSystemService: FileSystemService,
     private readonly memoryStore: IMemoryStore
@@ -248,6 +249,15 @@ export class GraphBuilder {
   }
 
   async updateForFile(filePath: string, projectPath: string): Promise<void> {
+    // Защита от рекурсии
+    if (this.isUpdating) {
+      logger.warn('updateForFile уже выполняется, пропускаем вызов', 'GraphBuilder');
+      return;
+    }
+
+    this.isUpdating = true;
+
+    try {
     const relativePath = path.relative(projectPath, filePath);
     logger.info('Инкрементальное обновление: ' + relativePath, 'GraphBuilder');
 
@@ -268,6 +278,11 @@ export class GraphBuilder {
       logger.info('Файл обновлён: ' + relativePath, 'GraphBuilder');
     } catch (error) {
       logger.error('Ошибка обновления файла: ' + relativePath, error, 'GraphBuilder');
+    }
+  }
+
+    finally {
+      this.isUpdating = false;
     }
   }
 }

@@ -40,6 +40,7 @@ export class ProjectManager implements IProjectManager {
   private fileWatcher: vscode.FileSystemWatcher | null = null;
   private changeListeners: Array<(event: FileChangeEvent) => void> = [];
   private disposables: vscode.Disposable[] = [];
+  private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
 
   constructor(private readonly fileSystemService: FileSystemService) {}
 
@@ -188,7 +189,7 @@ export class ProjectManager implements IProjectManager {
     }
 
     // Создаём новый watcher для всех файлов в проекте
-    const pattern = new vscode.RelativePattern(projectPath, '**/*');
+    const pattern = new vscode.RelativePattern(projectPath, '**/{*,!.devil/**}');
     this.fileWatcher = vscode.workspace.createFileSystemWatcher(pattern);
 
     // Подписываемся на события
@@ -211,6 +212,21 @@ export class ProjectManager implements IProjectManager {
    * Обрабатывает событие изменения файла.
    */
   private handleFileChange(type: FileChangeEvent['type'], filePath: string): void {
+    // Debounce: ждём 500мс перед обработкой, чтобы избежать лавины вызовов
+    const existingTimer = this.debounceTimers.get(filePath);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+    
+    const timer = setTimeout(() => {
+      this.debounceTimers.delete(filePath);
+      this.processFileChange(type, filePath);
+    }, 500);
+    
+    this.debounceTimers.set(filePath, timer);
+  }
+
+  private processFileChange(type: FileChangeEvent['type'], filePath: string): void {
     // Игнорируем изменения в .devil/
     if (filePath.includes('.devil')) {
       return;
