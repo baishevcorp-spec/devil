@@ -89,7 +89,8 @@ export function activate(context: vscode.ExtensionContext): void {
         graphBuilder,
         multiModelManager,
         configManager,
-        devPlanManager
+        devPlanManager,
+        devPlanExecutor
       );
     });
 
@@ -222,7 +223,8 @@ export function activate(context: vscode.ExtensionContext): void {
           graphBuilder,
           multiModelManager,
           configManager,
-          devPlanManager
+          devPlanManager,
+          devPlanExecutor
         );
 
         const filePath = editor.document.fileName;

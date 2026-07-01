@@ -1298,7 +1298,8 @@ export class CommandHandler {
             'Используйте команды:\n' +
             '- `/dev next` — выполнить следующий шаг\n' +
             '- `/dev status` — показать прогресс\n' +
-            '- `/dev reset` — сбросить план и создать новый',
+            '- `/dev reset` — сбросить план и создать новый\n\n' +
+            '💡 **Совет:** Перед созданием нового плана выполните `/checklist sync` для актуализации чек-листа.',
         };
       }
 
@@ -1510,7 +1511,10 @@ export class CommandHandler {
       return {
         success: true,
         message:
-          '🔄 План разработки сброшен.\n\nИспользуйте `/dev generate` для создания нового плана.',
+          '🔄 План разработки сброшен.\n\n' +
+          '💡 **Рекомендуемый порядок действий:**\n' +
+          '1. Выполните `/checklist sync` — обновить чек-лист с реальной структурой проекта\n' +
+          '2. Выполните `/dev generate` — создать новый план на основе актуального чек-листа\n',
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

@@ -265,7 +265,7 @@ export class DevPlanExecutor {
 
     const response = await this.llmProvider.generate(prompt, {
       systemPrompt: context.systemPrompt,
-      maxTokens: 4000
+      maxTokens: 10000
     });
 
     return response.content;

@@ -10,7 +10,7 @@ import { logger } from '../utils/logger';
 
 /**
  * DevPlanManager — сервис для управления планом разработки
- * 
+ *
  * Отвечает за:
  * - Сбор контекста (interview, roadmap, checklist, graph)
  * - Формирование ТЗ через LLM
@@ -220,11 +220,18 @@ export class DevPlanManager {
     }
 
     if (context.checklistContent) {
-      prompt += '## Чек-лист файлов\n\n' + context.checklistContent + '\n\n';
+      prompt += '## Чек-лист файлов\n\n';
+      prompt += 'Файлы, отмеченные как `[x]`, уже существуют в проекте. НЕ включай их в план.\n\n';
+      prompt += context.checklistContent + '\n\n';
     }
 
     prompt += '## Задача\n\n';
     prompt += 'Создай пошаговый план разработки в формате JSON массива.\n\n';
+    prompt += '**ВАЖНО:**\n';
+    prompt += '1. НЕ включай в план файлы и директории, которые уже существуют в проекте.\n';
+    prompt += '2. Если файл отмечен как `[x]` в чек-листе — он уже создан, не включай его.\n';
+    prompt += '3. Если директория уже есть в структуре проекта — не включай её в план.\n';
+    prompt += '4. Включай в план только то, что нужно создать с нуля.\n\n';
     prompt += 'Каждый шаг должен иметь:\n';
     prompt += '- `id`: номер шага (начинается с 1)\n';
     prompt += '- `type`: тип шага ("create_directory", "create_file", "modify_file", "delete_file")\n';
@@ -303,7 +310,7 @@ export class DevPlanManager {
 
     const pendingStep = this.currentPlan.steps.find(step => {
       if (step.status !== 'pending') return false;
-      
+
       // Проверяем зависимости
       if (step.dependencies && step.dependencies.length > 0) {
         return step.dependencies.every(depId => {
@@ -311,7 +318,7 @@ export class DevPlanManager {
           return depStep && depStep.status === 'completed';
         });
       }
-      
+
       return true;
     });
 
