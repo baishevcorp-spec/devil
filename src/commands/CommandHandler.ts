@@ -12,6 +12,7 @@ import { IMultiModelManager } from '../interfaces/IMultiModelManager';
 import * as child_process from 'child_process';
 import * as util from 'util';
 import * as path from 'path';
+import { InterviewData, InterviewStatusData, validateInterview } from '../interfaces/IInterview';
 
 export interface CommandResult {
   success: boolean;
@@ -227,33 +228,57 @@ export class CommandHandler {
 
       // 3. Если проект пустой и интервью нет — запускаем процесс интервью
       if (isProjectEmpty && !hasInterview) {
-        return await this.startInterview(project, analysis);
+        return await this.startInterview(project);
       }
 
-      // 4. Если проект пустой, но интервью есть — читаем его и генерируем roadmap
-      let interviewContent: string | null = null;
+      // 4. Если проект пустой, но интервью есть — читаем JSON
+      let interviewData: InterviewData | null = null;
       if (isProjectEmpty && hasInterview) {
-        interviewContent = await this.fileSystemService.readFile(interviewPath);
-        // Проверяем, что файл содержит не только вопросы (хотя бы несколько слов)
-        // Для простоты считаем, что если файл не пустой, то пользователь заполнил его.
-        if (!interviewContent || interviewContent.trim().length < 10) {
+        const interviewContent = await this.fileSystemService.readFile(interviewPath);
+        try {
+          const parsed = JSON.parse(interviewContent);
+          if (!validateInterview(parsed)) {
+            return {
+              success: false,
+              message:
+                '📄 Файл `.devil/interview.json` заполнен некорректно.\n\n' +
+                'Убедитесь, что заполнены все обязательные поля:\n' +
+                '- projectName (строка)\n' +
+                '- description (строка)\n' +
+                '- goals (массив строк, минимум 1)\n' +
+                '- techStack (массив строк, минимум 1)\n' +
+                '- targetAudience (строка)\n' +
+                '- deadlines (строка)\n\n' +
+                'Откройте файл и заполните поля, затем выполните команду снова.',
+            };
+          }
+          interviewData = parsed;
+        } catch (parseError) {
           return {
             success: false,
-            message:
-              '📄 Файл интервью `.devil/interview.md` пуст или слишком короткий.\n' +
-              'Пожалуйста, откройте его, напишите ответы на вопросы и выполните команду снова.',
+            message: '📄 Ошибка чтения `.devil/interview.json`: файл не является валидным JSON.\n\n' +
+                     'Проверьте синтаксис файла и попробуйте снова.'
           };
         }
       }
 
-      // 5. Если проект непустой, но интервью есть — можем использовать его как доп. контекст
+      // 5. Если проект непустой, но интервью есть — читаем как доп. контекст
       if (!isProjectEmpty && hasInterview) {
-        interviewContent = await this.fileSystemService.readFile(interviewPath);
+        const interviewContent = await this.fileSystemService.readFile(interviewPath);
+        try {
+          const parsed = JSON.parse(interviewContent);
+          if (validateInterview(parsed)) {
+            interviewData = parsed;
+          }
+        } catch (parseError) {
+          // Игнорируем ошибки парсинга для непустого проекта
+          logger.warn('Не удалось прочитать interview.json как JSON', 'CommandHandler');
+        }
       }
 
       // 6. Строим контекст и промпт с учётом интервью
       const context = await this.buildRoadmapContext(project, analysis);
-      const prompt = this.buildRoadmapPrompt(project, analysis, context, interviewContent);
+      const prompt = this.buildRoadmapPrompt(context, interviewData);
 
       const response = await this.llmProvider.generate(prompt, {
         systemPrompt: context.systemPrompt,
@@ -277,33 +302,60 @@ export class CommandHandler {
   }
 
   // ---------- Запуск интервью для пустого проекта ----------
-  private async startInterview(project: any, analysis: ProjectAnalysis): Promise<CommandResult> {
-    // Генерируем вопросы через LLM
-    const prompt = this.buildInterviewPrompt(analysis);
-    const response = await this.llmProvider.generate(prompt, {
-      systemPrompt:
-        'Ты — опытный технический директор. Твоя задача — задать уточняющие вопросы для нового проекта.',
-    });
+  private async startInterview(project: any): Promise<CommandResult> {
+    const interviewPath = path.join(project.devilPath, 'interview.json');
+    const statusPath = path.join(project.devilPath, '.interview_status.json');
 
-    const interviewContent = response.content;
-    const interviewPath = path.join(project.devilPath, this.INTERVIEW_FILENAME);
+    try {
+      const interviewTemplate: InterviewData = {
+        projectName: project.name || '',
+        description: '',
+        goals: [],
+        techStack: [],
+        targetAudience: '',
+        deadlines: '',
+        constraints: [],
+        additionalInfo: ''
+      };
 
-    // Сохраняем вопросы в файл
-    await this.fileSystemService.writeFile(interviewPath, interviewContent);
+      const interviewContent = JSON.stringify(interviewTemplate, null, 2);
+      await this.fileSystemService.writeFile(interviewPath, interviewContent);
 
-    return {
-      success: true,
-      message:
-        '📋 **Проект пустой. Для начала нужно провести интервью.**\n\n' +
-        'Я сгенерировал список вопросов и сохранил их в файл:\n' +
-        '`.devil/interview.md`\n\n' +
-        '**Пожалуйста, откройте этот файл, напишите ответы на каждый вопрос,**\n' +
-        'а затем повторно выполните команду `/roadmap generate`,\n' +
-        'чтобы получить итоговый Roadmap.\n\n' +
-        '---\n\n' +
-        interviewContent,
-      data: { path: interviewPath, content: interviewContent },
-    };
+      // Создаём статус-файл
+      const statusData: InterviewStatusData = {
+        status: 'pending',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        interviewFile: 'interview.json'
+      };
+      await this.fileSystemService.writeFile(statusPath, JSON.stringify(statusData, null, 2));
+
+      const message =
+        '📋 Создано структурированное интервью для вашего проекта.\n\n' +
+        '**Файл:** `.devil/interview.json`\n\n' +
+        'Пожалуйста, откройте файл и заполните следующие поля:\n\n' +
+        '- **projectName**: Название проекта\n' +
+        '- **description**: Краткое описание проекта (2-3 предложения)\n' +
+        '- **goals**: Цели проекта (массив строк)\n' +
+        '- **techStack**: Технологии (массив строк, например: ["React", "TypeScript", "Node.js"])\n' +
+        '- **targetAudience**: Целевая аудитория\n' +
+        '- **deadlines**: Сроки разработки\n' +
+        '- **constraints**: Ограничения (массив строк)\n' +
+        '- **additionalInfo**: Дополнительная информация (опционально)\n\n' +
+        'После заполнения выполните команду `/roadmap generate` снова для генерации плана проекта.';
+
+      return {
+        success: true,
+        message,
+        data: { path: interviewPath, statusPath }
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: 'Ошибка создания интервью: ' + errorMessage
+      };
+    }
   }
 
   // ---------- Промпт для генерации вопросов интервью ----------
@@ -394,58 +446,46 @@ export class CommandHandler {
     return await this.contextBuilder.buildContext(userQuery, includeOptions);
   }
 
-  private buildRoadmapPrompt(
-    _project: { path: string },
-    analysis: ProjectAnalysis,
+    private buildRoadmapPrompt(
     context: any,
-    interviewContent: string | null
+    interviewData: InterviewData | null
   ): string {
-    const isProjectEmpty = analysis.totalFiles === 0;
+    let prompt = 'Ты — опытный архитектор программного обеспечения. ';
 
-    let interviewSection = '';
-    if (interviewContent) {
-      interviewSection = `
-**Дополнительные данные из интервью (ответы пользователя):**
-${interviewContent}
+    if (interviewData) {
+      prompt += 'Создай детальный план проекта на основе следующей информации:\n\n' +
+        '## Информация о проекте\n\n' +
+        `**Название:** ${interviewData.projectName}\n\n` +
+        `**Описание:** ${interviewData.description}\n\n` +
+        `**Цели:**\n${interviewData.goals.map(g => `- ${g}`).join('\n')}\n\n` +
+        `**Технологии:** ${interviewData.techStack.join(', ')}\n\n` +
+        `**Целевая аудитория:** ${interviewData.targetAudience}\n\n` +
+        `**Сроки:** ${interviewData.deadlines}\n\n`;
 
-Учти эти ответы при построении Roadmap.
-`;
-    }
+      if (interviewData.constraints.length > 0) {
+        prompt += `**Ограничения:**\n${interviewData.constraints.map(c => `- ${c}`).join('\n')}\n\n`;
+      }
 
-    let instructions = '';
-    if (isProjectEmpty) {
-      instructions = `
-**⚠️ Проект пустой.** На основе ответов из интервью (см. ниже) составь детальный Roadmap.
-Не задавай больше вопросов, просто создай план разработки.
-`;
+      if (interviewData.additionalInfo) {
+        prompt += `**Дополнительная информация:** ${interviewData.additionalInfo}\n\n`;
+      }
     } else {
-      instructions = `
-**✅ Проект непустой.** Проанализируй существующую структуру и создай Roadmap.
-${interviewContent ? 'Дополнительно учти ответы из интервью, если они есть.' : ''}
-`;
+      prompt += 'Создай детальный план проекта на основе структуры файлов.\n\n';
     }
 
-    return `
-Ты — опытный технический директор. Создай Roadmap в формате Markdown.
+    prompt += `## Структура проекта\n\n${context.systemPrompt}\n\n` +
+      '## Требования к Roadmap\n\n' +
+      '1. Разбей проект на этапы (фазы)\n' +
+      '2. Для каждого этапа укажи:\n' +
+      '   - Название этапа\n' +
+      '   - Описание задач\n' +
+      '   - Ожидаемый результат\n' +
+      '   - Примерные сроки\n' +
+      '3. Используй Markdown-форматирование\n' +
+      '4. Будь конкретным и практичным\n\n' +
+      'Отвечай на русском языке.';
 
-${this.buildProjectSummary(analysis)}
-
-${interviewSection}
-
-${instructions}
-
-Контекст проекта:
-${context.systemPrompt || 'Нет дополнительного контекста.'}
-
-Формат Roadmap:
-1. Краткое описание проекта
-2. Основные этапы (с порядком реализации с помощью ИИ агента)
-3. Модули и их зависимости
-4. Риски и митигации
-5. Критерии готовности каждого этапа
-
-Отвечай на русском языке.
-`;
+    return prompt;
   }
 
   private buildProjectSummary(analysis: ProjectAnalysis): string {
