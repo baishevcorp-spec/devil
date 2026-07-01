@@ -110,6 +110,9 @@ export class CommandHandler {
       case '/scan':
         return await this.handleScan(args, selectedCode);
       case '/roadmap':
+        if (args.length > 0 && args[0] === 'update') {
+          return await this.handleRoadmapUpdate();
+        }
         return await this.handleRoadmap(args);
       case '/checklist':
         if (args.length > 0 && args[0] === 'sync') {
@@ -331,6 +334,134 @@ export class CommandHandler {
         message: 'Ошибка генерации Roadmap: ' + errorMessage,
       };
     }
+  }
+
+  private async handleRoadmapUpdate(): Promise<CommandResult> {
+    const project = this.projectManager.getCurrentProject();
+    if (!project) {
+      return {
+        success: false,
+        message: 'Проект не открыт.',
+      };
+    }
+
+    try {
+      const roadmapPath = path.join(project.devilPath, 'roadmap.md');
+      const interviewPath = path.join(project.devilPath, 'interview.json');
+
+      // 1. Проверяем существование текущего roadmap
+      const roadmapExists = await this.fileSystemService.fileExists(roadmapPath);
+      if (!roadmapExists) {
+        return {
+          success: false,
+          message:
+            '📄 Roadmap не найден (`.devil/roadmap.md`).\n\n' +
+            'Сначала выполните команду `/roadmap generate` для создания roadmap.',
+        };
+      }
+
+      // 2. Проверяем существование interview.json
+      const interviewExists = await this.fileSystemService.fileExists(interviewPath);
+      if (!interviewExists) {
+        return {
+          success: false,
+          message:
+            '📄 Интервью не найдено (`.devil/interview.json`).\n\n' +
+            'Сначала выполните команду `/roadmap generate` для создания интервью.',
+        };
+      }
+
+      // 3. Читаем текущий roadmap
+      const currentRoadmap = await this.fileSystemService.readFile(roadmapPath);
+
+      // 4. Определяем номер версии
+      const versionNumber = await this.getNextVersionNumber(project.devilPath);
+      const backupPath = path.join(project.devilPath, `roadmap_v${versionNumber}.md`);
+
+      // 5. Сохраняем текущую версию как backup
+      await this.fileSystemService.writeFile(backupPath, currentRoadmap);
+      logger.info(`Сохранена предыдущая версия roadmap: ${backupPath}`, 'CommandHandler');
+
+      // 6. Читаем interview.json
+      const interviewContent = await this.fileSystemService.readFile(interviewPath);
+      let interviewData: InterviewData | null = null;
+
+      try {
+        const parsed = JSON.parse(interviewContent);
+        if (validateInterview(parsed)) {
+          interviewData = parsed;
+        }
+      } catch (parseError) {
+        logger.warn('Не удалось прочитать interview.json', 'CommandHandler');
+      }
+
+      // 7. Строим контекст и промпт
+      const analysis = await this.analyzeProjectState(project);
+      const context = await this.buildRoadmapContext(project, analysis);
+      const prompt = this.buildRoadmapPrompt(context, interviewData);
+
+      // 8. Генерируем новый roadmap
+      const response = await this.llmProvider.generate(prompt, {
+        systemPrompt: context.systemPrompt,
+      });
+
+      // 9. Сохраняем новый roadmap
+      await this.fileSystemService.writeFile(roadmapPath, response.content);
+
+      // 10. Обновляем статус интервью
+      await this.updateInterviewStatus(project, 'roadmap_generated');
+
+      const message =
+        `✅ Roadmap обновлён и сохранён в \`.devil/roadmap.md\`\n\n` +
+        `📦 **Предыдущая версия сохранена:** \`${backupPath}\`\n\n` +
+        `📊 **Версия:** v${versionNumber + 1}\n\n` +
+        response.content;
+
+      return {
+        success: true,
+        message,
+        data: {
+          path: roadmapPath,
+          content: response.content,
+          backupPath,
+          version: versionNumber + 1
+        },
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: 'Ошибка обновления Roadmap: ' + errorMessage,
+      };
+    }
+  }
+
+  /**
+   * Определяет следующий номер версии roadmap.
+   */
+  private async getNextVersionNumber(devilPath: string): Promise<number> {
+    const files = await this.fileSystemService.scanDirectory(devilPath, {
+      excludePatterns: []
+    });
+
+    let maxVersion = 0;
+    const collectVersions = (node: any) => {
+      if (node.type === 'file' && node.name.match(/^roadmap_v\d+\.md$/)) {
+        const match = node.name.match(/^roadmap_v(\d+)\.md$/);
+        if (match) {
+          const version = parseInt(match[1], 10);
+          if (version > maxVersion) {
+            maxVersion = version;
+          }
+        }
+      }
+      if (node.children) {
+        node.children.forEach(collectVersions);
+      }
+    };
+
+    collectVersions(files);
+    return maxVersion;
   }
 
   // ---------- Запуск интервью для пустого проекта ----------
