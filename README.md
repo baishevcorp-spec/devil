@@ -276,7 +276,7 @@ Devil — это персональный проект, но если у вас 
 
 - **Автор:** vitobro
 - **Email:** support@appaibb.ru
-- **GitHub:** [github.com/yourusername](https://github.com/baishevcorp-spec)
+- **GitHub:** https://github.com/baishevcorp-spec
 
 ## 🙏 Благодарности
 

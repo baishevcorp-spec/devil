@@ -1,21 +1,14 @@
 # Зависимости
 node_modules/
 package-lock.json
+yarn.lock
 
-# Сборка
+# Скомпилированные файлы
 out/
 dist/
 *.vsix
 
-# IDE
-.vscode-test/
-*.code-workspace
-
-# ОС
-.DS_Store
-Thumbs.db
-
-# Данные проекта (не коммитим в репозиторий расширения)
+# Служебная директория проекта
 .devil/
 
 # Бэкапы
@@ -23,7 +16,24 @@ backups/
 
 # Логи
 *.log
-npm-debug.log*
+logs/
 
-# Coverage
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# ОС
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Тесты
 coverage/
+.nyc_output/
+
+# Временные файлы
+*.tmp
+*.bak
+*.cache
