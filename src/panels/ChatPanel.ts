@@ -97,7 +97,8 @@ export class ChatPanel {
       searchIndex,
       graphBuilder,
       multiModelManager,
-      configManager || new ConfigManager()    );
+      configManager || new ConfigManager()
+    );
     return ChatPanel.currentPanel;
   }
 
@@ -225,7 +226,7 @@ export class ChatPanel {
           model: this.configManager.getModel(),
           maxRetries: this.configManager.getMaxRetries(),
           systemPrompt: this.configManager.getDefaultSystemPrompt(),
-          debugMode: this.configManager.isDebugMode()
+          debugMode: this.configManager.isDebugMode(),
         };
         this._panel.webview.postMessage({ type: 'loadSettings', settings });
         break;
@@ -249,7 +250,7 @@ export class ChatPanel {
 
         this._panel.webview.postMessage({
           type: 'agentResponse',
-          content: '✅ Настройки сохранены успешно.'
+          content: '✅ Настройки сохранены успешно.',
         });
         break;
       }
@@ -259,7 +260,7 @@ export class ChatPanel {
         this._panel.webview.postMessage({
           type: 'availableModels',
           models: models,
-          currentModel: currentModel?.model || this.configManager.getModel()
+          currentModel: currentModel?.model || this.configManager.getModel(),
         });
         break;
       }
@@ -268,10 +269,7 @@ export class ChatPanel {
 
   private async _processUserMessage(content: string): Promise<void> {
     try {
-      // 1. Получаем базовый промпт из настроек (персонаж/правила агента)
       const baseSystemPrompt = this.configManager.getDefaultSystemPrompt();
-
-      // 2. Строим динамический контекст проекта
       const context = await this.contextBuilder.buildContext(content, {
         includeProjectStructure: true,
         includeRoadmap: true,
@@ -284,11 +282,15 @@ export class ChatPanel {
         'ChatPanel'
       );
 
-      // 3. Объединяем: базовый промпт (настройки) + контекст проекта
-      // Настройки задают "личность и правила", контекст добавляет информацию о коде
       const finalSystemPrompt = baseSystemPrompt
         ? `${baseSystemPrompt}\n\n--- Контекст проекта ---\n\n${context.systemPrompt}`
         : context.systemPrompt;
+
+      // Показываем индикатор "Думаю..."
+      this.sendMessage({
+        type: 'agentResponse',
+        content: ' Обрабатываю запрос...',
+      });
 
       const response = await this.llmProvider.generate(content, {
         systemPrompt: finalSystemPrompt,
@@ -461,10 +463,16 @@ export class ChatPanel {
       '<head>' +
       '    <meta charset="UTF-8">' +
       '    <meta name="viewport" content="width=device-width, initial-scale=1.0">' +
-      '    <meta http-equiv="Content-Security-Policy" content="' + csp + '">' +
+      '    <meta http-equiv="Content-Security-Policy" content="' +
+      csp +
+      '">' +
       '    <title>Devil Chat</title>' +
-      '    <link rel="stylesheet" href="' + styleUri + '">' +
-      '    <link rel="stylesheet" href="' + highlightStylesUri + '">' +
+      '    <link rel="stylesheet" href="' +
+      styleUri +
+      '">' +
+      '    <link rel="stylesheet" href="' +
+      highlightStylesUri +
+      '">' +
       '</head>' +
       '<body>' +
       '    <div class="chat-container">' +
@@ -572,15 +580,51 @@ export class ChatPanel {
       '        </div>' +
       '    </div>' +
       '' +
-      '    <script nonce="' + nonce + '" src="' + markedUri + '"></script>' +
-      '    <script nonce="' + nonce + '" src="' + highlightUri + '"></script>' +
-      '    <script nonce="' + nonce + '" src="' + highlightLangTypescript + '"></script>' +
-      '    <script nonce="' + nonce + '" src="' + highlightLangJavascript + '"></script>' +
-      '    <script nonce="' + nonce + '" src="' + highlightLangPython + '"></script>' +
-      '    <script nonce="' + nonce + '" src="' + highlightLangJson + '"></script>' +
-      '    <script nonce="' + nonce + '" src="' + highlightLangBash + '"></script>' +
-      '    <script nonce="' + nonce + '" src="' + highlightLangSql + '"></script>' +
-      '    <script nonce="' + nonce + '" src="' + scriptUri + '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      markedUri +
+      '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      highlightUri +
+      '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      highlightLangTypescript +
+      '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      highlightLangJavascript +
+      '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      highlightLangPython +
+      '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      highlightLangJson +
+      '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      highlightLangBash +
+      '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      highlightLangSql +
+      '"></script>' +
+      '    <script nonce="' +
+      nonce +
+      '" src="' +
+      scriptUri +
+      '"></script>' +
       '</body>' +
       '</html>'
     );

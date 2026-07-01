@@ -1,6 +1,6 @@
 /**
  * Мок модуля 'vscode' для Jest-тестов.
- * 
+ *
  * VS Code API недоступно в Node.js-окружении Jest,
  * поэтому мы эмулируем только нужные нам части.
  */
@@ -8,6 +8,14 @@
 type ConfigStore = Record<string, any>;
 
 const configStore: ConfigStore = {};
+
+
+// ProgressLocation enum
+export enum ProgressLocation {
+  SourceControl = 'scm',
+  Window = 'window',
+  Notification = 15,
+}
 
 export class RelativePattern {
   constructor(public base: string, public pattern: string) {}
@@ -41,7 +49,39 @@ export const window = {
   showInformationMessage: jest.fn(),
   showErrorMessage: jest.fn(),
   showWarningMessage: jest.fn()
+,
+    withProgress: jest.fn(async (_options, task) => {
+    const progress = { report: jest.fn() };
+    const token = { isCancellationRequested: false, onCancellationRequested: jest.fn(() => ({ dispose: jest.fn() })) };
+    return task(progress, token);
+  }),
 };
+
+
+// CancellationTokenSource mock
+export class CancellationTokenSource {
+  private _cancelled = false;
+  private _listeners: Array<() => void> = [];
+
+  get token() {
+    return {
+      isCancellationRequested: this._cancelled,
+      onCancellationRequested: (listener: () => void) => {
+        this._listeners.push(listener);
+        return { dispose: () => {} };
+      }
+    };
+  }
+
+  cancel() {
+    this._cancelled = true;
+    this._listeners.forEach(listener => listener());
+  }
+
+  dispose() {
+    this._listeners = [];
+  }
+}
 
 export const commands = {
   registerCommand: jest.fn(() => ({ dispose: jest.fn() }))

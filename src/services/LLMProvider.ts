@@ -4,6 +4,7 @@ import { LLMError, NetworkError } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { ModelConfig } from '../interfaces/IMultiModelManager';
 import { ILLMProvider, GenerateOptions, LLMResponse } from '../interfaces/ILLMProvider';
+import { BackgroundTaskManager } from './BackgroundTaskManager';
 
 /**
  * Проверяет, является ли модель современной (gpt-5.x, o1, o3, o4),
@@ -123,9 +124,7 @@ function buildRequestBody(
       return {
         model,
         instructions: systemPrompt,
-        input: [
-          { role: 'user', content: prompt },
-        ],
+        input: [{ role: 'user', content: prompt }],
         ...maxTokensParam, // ✅ Теперь это max_output_tokens
         stream: options.stream,
       };
@@ -163,10 +162,12 @@ function extractContentFromResponse(
     }
 
     case 'responses': {
-      const output = data.output as Array<{
-        type?: string;
-        content?: Array<{ type?: string; text?: string }>;
-      }> | undefined;
+      const output = data.output as
+        | Array<{
+            type?: string;
+            content?: Array<{ type?: string; text?: string }>;
+          }>
+        | undefined;
       const firstOutput = output?.[0];
       const textBlock = firstOutput?.content?.[0];
       return textBlock?.type === 'output_text' ? textBlock.text || '' : '';
@@ -245,11 +246,13 @@ export class LLMProvider implements ILLMProvider {
   private currentModel: string;
   private currentBaseUrl: string;
   private currentApiKey: string;
+  private taskManager: BackgroundTaskManager;
 
   constructor(private readonly configManager: ConfigManager) {
     this.currentModel = configManager.getModel();
     this.currentBaseUrl = this.normalizeUrl(configManager.getBaseUrl());
     this.currentApiKey = configManager.getApiKey();
+    this.taskManager = new BackgroundTaskManager(15000);
 
     this.axiosInstance = axios.create({
       timeout: 60000,
@@ -269,51 +272,61 @@ export class LLMProvider implements ILLMProvider {
   }
 
   async generate(prompt: string, options: GenerateOptions = {}): Promise<LLMResponse> {
-    const maxRetries = options.maxRetries ?? this.configManager.getMaxRetries();
-    const timeout = options.timeout ?? 60000;
+    return this.taskManager.run(
+      `Запрос к ${this.currentModel}`,
+      async () => {
+        // Существующая логика generate
+        const maxRetries = options.maxRetries ?? this.configManager.getMaxRetries();
+        const timeout = options.timeout ?? 60000;
 
-    logger.info(`Отправка запроса к LLM (модель: ${this.currentModel})`, 'LLMProvider');
-    logger.debug(`Промпт: ${prompt.substring(0, 100)}...`, 'LLMProvider');
+        logger.info(`Отправка запроса к LLM (модель: ${this.currentModel})`, 'LLMProvider');
 
-    let lastError: Error | null = null;
+        let lastError: Error | null = null;
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await this.sendRequest(prompt, options, timeout);
-        logger.info(
-          `Ответ получен (попытка ${attempt}, токенов: ${response.tokensUsed})`,
-          'LLMProvider'
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            const response = await this.sendRequest(prompt, options, timeout);
+            logger.info(
+              `Ответ получен (попытка ${attempt}, токенов: ${response.tokensUsed})`,
+              'LLMProvider'
+            );
+            return response;
+          } catch (error) {
+            lastError = error instanceof Error ? error : new Error(String(error));
+
+            if (error instanceof LLMError && !error.retryable) {
+              logger.error(`Неразрешимая ошибка LLM (попытка ${attempt})`, error, 'LLMProvider');
+              throw error;
+            }
+
+            if (attempt < maxRetries) {
+              const delay = this.calculateRetryDelay(attempt);
+              logger.warn(
+                `Ошибка LLM (попытка ${attempt}/${maxRetries}), повтор через ${delay}мс`,
+                'LLMProvider'
+              );
+              await this.sleep(delay);
+            } else {
+              logger.error(`Все попытки исчерпаны (${maxRetries})`, error, 'LLMProvider');
+            }
+          }
+        }
+
+        if (lastError instanceof NetworkError) {
+          throw lastError;
+        }
+
+        throw new LLMError(
+          `Failed after ${maxRetries} attempts: ${lastError?.message ?? 'Unknown error'}`,
+          false,
+          'Не удалось получить ответ от LLM. Проверьте настройки и попробуйте позже.'
         );
-        return response;
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-
-        if (error instanceof LLMError && !error.retryable) {
-          logger.error(`Неразрешимая ошибка LLM (попытка ${attempt})`, error, 'LLMProvider');
-          throw error;
-        }
-
-        if (attempt < maxRetries) {
-          const delay = this.calculateRetryDelay(attempt);
-          logger.warn(
-            `Ошибка LLM (попытка ${attempt}/${maxRetries}), повтор через ${delay}мс`,
-            'LLMProvider'
-          );
-          await this.sleep(delay);
-        } else {
-          logger.error(`Все попытки исчерпаны (${maxRetries})`, error, 'LLMProvider');
-        }
+      },
+      {
+        thresholdMs: 15000,
+        cancellable: true,
+        showNotification: true,
       }
-    }
-
-    if (lastError instanceof NetworkError) {
-      throw lastError;
-    }
-
-    throw new LLMError(
-      `Failed after ${maxRetries} attempts: ${lastError?.message ?? 'Unknown error'}`,
-      false,
-      'Не удалось получить ответ от LLM. Проверьте настройки и попробуйте позже.'
     );
   }
 
@@ -335,18 +348,14 @@ export class LLMProvider implements ILLMProvider {
       logger.info(`Отправка запроса на URL: ${url}`, 'LLMProvider');
       logger.debug(`Модель: ${this.currentModel}`, 'LLMProvider');
 
-      const response = await this.axiosInstance.post(
-        url,
-        requestBody,
-        {
-          headers: {
-            Authorization: `Bearer ${this.currentApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          timeout,
-          responseType: 'stream',
-        }
-      );
+      const response = await this.axiosInstance.post(url, requestBody, {
+        headers: {
+          Authorization: `Bearer ${this.currentApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout,
+        responseType: 'stream',
+      });
 
       for await (const chunk of response.data) {
         const lines = chunk
@@ -414,17 +423,13 @@ export class LLMProvider implements ILLMProvider {
         'LLMProvider'
       );
 
-      const response = await this.axiosInstance.post(
-        url,
-        requestBody,
-        {
-          headers: {
-            Authorization: `Bearer ${this.currentApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          timeout,
-        }
-      );
+      const response = await this.axiosInstance.post(url, requestBody, {
+        headers: {
+          Authorization: `Bearer ${this.currentApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout,
+      });
 
       const data = response.data as Record<string, unknown>;
 
