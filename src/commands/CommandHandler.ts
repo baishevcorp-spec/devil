@@ -14,6 +14,7 @@ import * as util from 'util';
 import * as path from 'path';
 import { InterviewData, InterviewStatusData, validateInterview } from '../interfaces/IInterview';
 import { RoadmapParser } from '../utils/RoadmapParser';
+import { ChecklistSync } from '../utils/ChecklistSync';
 
 export interface CommandResult {
   success: boolean;
@@ -111,6 +112,9 @@ export class CommandHandler {
       case '/roadmap':
         return await this.handleRoadmap(args);
       case '/checklist':
+        if (args.length > 0 && args[0] === 'sync') {
+          return await this.handleChecklistSync();
+        }
         return await this.handleChecklist(args);
       case '/explain':
         return await this.handleExplain(args, selectedCode);
@@ -674,6 +678,57 @@ export class CommandHandler {
       return {
         success: false,
         message: 'Ошибка генерации чек-листа: ' + errorMessage,
+      };
+    }
+  }
+
+  private async handleChecklistSync(): Promise<CommandResult> {
+    const project = this.projectManager.getCurrentProject();
+    if (!project) {
+      return {
+        success: false,
+        message: 'Проект не открыт.',
+      };
+    }
+
+    try {
+      const checklistPath = path.join(project.devilPath, 'checklist.md');
+      const exists = await this.fileSystemService.fileExists(checklistPath);
+
+      if (!exists) {
+        return {
+          success: false,
+          message:
+            '📄 Чек-лист не найден (`.devil/checklist.md`).\n\n' +
+            'Сначала выполните команду `/checklist generate` для создания чек-листа.',
+        };
+      }
+
+      const checklistContent = await this.fileSystemService.readFile(checklistPath);
+
+      const sync = new ChecklistSync(this.fileSystemService);
+      const result = await sync.sync(project.path, checklistContent);
+
+      // Сохраняем обновлённый чек-лист
+      await this.fileSystemService.writeFile(checklistPath, result.content);
+
+      const message =
+        '✅ Чек-лист синхронизирован с реальной структурой проекта\n\n' +
+        `📊 **Отчёт:**\n` +
+        `- Всего элементов: ${result.totalItems}\n` +
+        `- ${result.report}\n\n` +
+        result.content;
+
+      return {
+        success: true,
+        message,
+        data: { path: checklistPath, content: result.content, report: result.report },
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: 'Ошибка синхронизации чек-листа: ' + errorMessage,
       };
     }
   }
@@ -1657,6 +1712,8 @@ export class CommandHandler {
       '**Анализ кода:**',
       '- `/refactor <путь>` — предложить рефакторинг кода (SOLID, паттерны)',
             '**Генерация:**',
+      '- `/checklist generate` — сгенерировать чек-лист на основе roadmap.md',
+      '- `/checklist sync` — синхронизировать чек-лист с реальной структурой проекта',
       '- `/test generate <путь>` или `/test <путь>` — сгенерировать юнит-тесты для файла',
       '- `/refactor <путь>` — предложить рефакторинг кода (SOLID, паттерны)',
       '- `/lint [путь]` — запустить ESLint для проверки кода',
