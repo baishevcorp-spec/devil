@@ -68,6 +68,21 @@ export class FileSystemService {
     }
   }
 
+  /**
+   * Удаляет файл по указанному пути.
+   * 
+   * @param filePath - Путь к файлу
+   */
+  async deleteFile(filePath: string): Promise<void> {
+    try {
+      await fs.unlink(filePath);
+      logger.info('Файл удалён: ' + filePath, 'FileSystemService');
+    } catch (error) {
+      logger.error('Не удалось удалить файл: ' + filePath, error, 'FileSystemService');
+      throw error;
+    }
+  }
+
   async scanDirectory(rootPath: string, options: ScanOptions = {}): Promise<FileTree> {
     const excludePatterns = options.excludePatterns || FileSystemService.DEFAULT_EXCLUDE_PATTERNS;
     const maxDepth = options.maxDepth || 10;
