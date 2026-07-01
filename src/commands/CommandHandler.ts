@@ -231,13 +231,27 @@ export class CommandHandler {
       // 2. Проверяем наличие файла интервью
       const hasInterview = await this.fileSystemService.fileExists(interviewPath);
 
+      // 2.5 Проверяем статус интервью
+      const interviewStatus = await this.getInterviewStatus(project);
+
+      // 2.6 Проверяем существование roadmap.md
+      const roadmapExists = await this.fileSystemService.fileExists(roadmapPath);
+
+      if (roadmapExists && interviewStatus?.status === 'roadmap_generated') {
+        return {
+          success: false,
+          message:
+            '📄 Roadmap уже существует (`.devil/roadmap.md`).\n\n' +
+            'Если вы хотите перегенерировать его с учётом новых данных, используйте команду:\n' +
+            '`/roadmap update`\n\n' +
+            'Или удалите существующий файл `.devil/roadmap.md` и выполните `/roadmap generate` снова.',
+        };
+      }
+
       // 3. Если проект пустой и интервью нет — запускаем процесс интервью
       if (isProjectEmpty && !hasInterview) {
         return await this.startInterview(project);
       }
-
-      // 3.5 Проверяем статус интервью
-      const interviewStatus = await this.getInterviewStatus(project);
 
       // 4. Если проект пустой, но интервью есть — читаем JSON
       let interviewData: InterviewData | null = null;
