@@ -428,7 +428,7 @@
       { name: '/memory delete', desc: 'Удалить узел из графовой памяти' },
       { name: '/rebuild', desc: 'Перестроить индекс поиска' },
       { name: '/lint', desc: 'Запустить линтер и показать отчёт' },
-      { name: '/test generate', desc: 'Сгенерировать юнит-тесты для файла' },
+      { name: '/test generate', desc: 'Сгенерировать юнит-тесты для файла (или /test <путь>)' },
     ];
 
     var commandButton = document.getElementById('commandButton');
