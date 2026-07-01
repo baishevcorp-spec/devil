@@ -298,7 +298,7 @@ export class ContextBuilder {
 
       const content = await this.fileSystemService.readFile(roadmapPath);
 
-      const maxLength = 2000;
+      const maxLength = 8000;
       const truncatedContent =
         content.length > maxLength
           ? content.substring(0, maxLength) + '\n\n[Roadmap обрезан]'
@@ -328,7 +328,7 @@ export class ContextBuilder {
 
       const content = await this.fileSystemService.readFile(checklistPath);
 
-      const maxLength = 1500;
+      const maxLength = 8000;
       const truncatedContent =
         content.length > maxLength
           ? content.substring(0, maxLength) + '\n\n[Чек-лист обрезан]'

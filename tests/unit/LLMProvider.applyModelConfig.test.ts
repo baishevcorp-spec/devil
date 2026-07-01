@@ -72,7 +72,7 @@ describe('LLMProvider.applyModelConfig', () => {
       model: 'llama3.1',
       taskTypes: ['chat'],
       temperature: 0.5,
-      maxTokens: 1000,
+      maxTokens: 8000,
       maxRetries: 5
     };
 

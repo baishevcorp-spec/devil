@@ -107,7 +107,7 @@ function buildRequestBody(
 ): Record<string, unknown> {
   const systemPrompt = options.systemPrompt || '';
   // ✅ Передаём endpointType в buildMaxTokensParam
-  const maxTokensParam = buildMaxTokensParam(model, endpointType, options.maxTokens || 2000);
+  const maxTokensParam = buildMaxTokensParam(model, endpointType, options.maxTokens || 8000);
 
   switch (endpointType) {
     case 'completion': {
@@ -419,7 +419,7 @@ export class LLMProvider implements ILLMProvider {
       const url = `${this.currentBaseUrl}${endpointPath}`;
       logger.info(`Отправка запроса на URL: ${url}`, 'LLMProvider');
       logger.debug(
-        `Модель: ${this.currentModel}, maxTokens: ${options.maxTokens ?? 2000}`,
+        `Модель: ${this.currentModel}, maxTokens: ${options.maxTokens ?? 8000}`,
         'LLMProvider'
       );
 

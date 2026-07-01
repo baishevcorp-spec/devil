@@ -13,7 +13,7 @@
  * const provider = new LLMProvider(configManager);
  * const response = await provider.generate('Объясни этот код', {
  *   temperature: 0.7,
- *   maxTokens: 1000
+ *   maxTokens: 8000
  * });
  * console.log(response.content);
  * ```
@@ -99,7 +99,7 @@ export interface GenerateOptions {
 
   /**
    * Максимальное количество токенов в ответе.
-   * @default 2000
+   * @default 8000
    */
   maxTokens?: number;
 
