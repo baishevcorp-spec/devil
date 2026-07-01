@@ -13,6 +13,7 @@ import * as child_process from 'child_process';
 import * as util from 'util';
 import * as path from 'path';
 import { InterviewData, InterviewStatusData, validateInterview } from '../interfaces/IInterview';
+import { RoadmapParser } from '../utils/RoadmapParser';
 
 export interface CommandResult {
   success: boolean;
@@ -573,7 +574,7 @@ export class CommandHandler {
     if (args.length === 0 || args[0] !== 'generate') {
       return {
         success: false,
-        message: 'Использование: /checklist generate\n\nСгенерирует чек-лист файлов проекта.',
+        message: 'Использование: /checklist generate\n\nСгенерирует чек-лист файлов проекта на основе roadmap.md.',
       };
     }
 
@@ -586,35 +587,87 @@ export class CommandHandler {
     }
 
     try {
+      // 1. Проверяем наличие roadmap.md
+      const roadmapPath = path.join(project.devilPath, 'roadmap.md');
+      const roadmapExists = await this.fileSystemService.fileExists(roadmapPath);
+
+      let roadmapContent = '';
+      if (roadmapExists) {
+        roadmapContent = await this.fileSystemService.readFile(roadmapPath);
+        logger.info('Roadmap найден и будет использован для генерации чек-листа', 'CommandHandler');
+      } else {
+        logger.warn('Roadmap не найден. Чек-лист будет сгенерирован на основе структуры проекта', 'CommandHandler');
+      }
+
+      // 2. Парсим roadmap (если есть)
+      let roadmapPrompt = '';
+      if (roadmapContent) {
+        const parser = new RoadmapParser();
+        const roadmap = parser.parse(roadmapContent);
+        roadmapPrompt = parser.formatForPrompt(roadmap);
+      }
+
+      // 3. Строим контекст
       const context = await this.contextBuilder.buildContext('Создай чек-лист файлов', {
         includeProjectStructure: true,
+        includeRoadmap: true,
       });
 
-      const prompt =
-        'Ты — опытный разработчик. Создай чек-лист файлов проекта в формате Markdown.\n\n' +
-        'Структура проекта:\n' +
-        context.systemPrompt +
-        '\n\n' +
-        'Для каждого файла укажи:\n' +
-        '- Путь к файлу\n' +
-        '- Краткое описание назначения\n' +
-        '- Статус (✅ реализован / в разработке / не начато)\n\n' +
-        'Формат:\n' +
-        '- [ ] `путь/к/файлу` — описание\n\n' +
-        'Отвечай на русском языке.';
+      // 4. Формируем промпт
+      let prompt = 'Ты — опытный разработчик. Создай чек-лист файлов проекта в формате Markdown.\n\n';
 
+      if (roadmapPrompt) {
+        prompt += '## Roadmap проекта\n\n' + roadmapPrompt + '\n\n';
+        prompt += 'На основе этого roadmap создай чек-лист, сгруппированный по этапам.\n\n';
+      }
+
+      prompt += '## Структура проекта\n\n' + context.systemPrompt + '\n\n';
+      prompt += '## Требования к чек-листу\n\n';
+      prompt += '1. Сгруппируй файлы по этапам (если есть roadmap) или по функциональности\n';
+      prompt += '2. Для каждого файла укажи:\n';
+      prompt += '   - Путь к файлу (относительно корня проекта)\n';
+      prompt += '   - Краткое описание назначения (1 предложение)\n';
+      prompt += '3. Используй формат с чекбоксами:\n';
+      prompt += '   `- [ ] \`путь/к/файлу\` — описание`\n\n';
+      prompt += '4. Если файл уже существует в проекте, пометь его как `[x]` вместо `[ ]`\n';
+      prompt += '5. Будь конкретным и практичным\n\n';
+      prompt += 'Отвечай на русском языке.';
+
+      // 5. Генерируем чек-лист через LLM
       const response = await this.llmProvider.generate(prompt, {
         systemPrompt: context.systemPrompt,
       });
 
-      const checklistPath = project.devilPath + '/checklist.md';
-      await this.fileSystemService.writeFile(checklistPath, response.content);
+      // 6. Валидируем пути и помечаем существующие файлы
+      let checklistContent = response.content;
+      const validationReport = await this.validateChecklistPaths(project.path, checklistContent);
+
+      if (validationReport.updated) {
+        checklistContent = validationReport.content;
+        logger.info(`Валидация путей: обновлено ${validationReport.markedExisting} существующих файлов`, 'CommandHandler');
+      }
+
+      // 7. Сохраняем чек-лист
+      const checklistPath = path.join(project.devilPath, 'checklist.md');
+      await this.fileSystemService.writeFile(checklistPath, checklistContent);
+
+      // 8. Формируем сообщение
+      let message = '✅ Чек-лист сгенерирован и сохранён в `.devil/checklist.md`\n\n';
+
+      if (roadmapExists) {
+        message += `📋 Основан на roadmap.md (${validationReport.totalFiles} файлов)\n\n`;
+      }
+
+      if (validationReport.markedExisting > 0) {
+        message += `✓ Отмечено ${validationReport.markedExisting} существующих файлов\n\n`;
+      }
+
+      message += checklistContent;
 
       return {
         success: true,
-        message:
-          '✅ Чек-лист сгенерирован и сохранён в `.devil/checklist.md`\n\n' + response.content,
-        data: { path: checklistPath, content: response.content },
+        message,
+        data: { path: checklistPath, content: checklistContent },
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -623,6 +676,48 @@ export class CommandHandler {
         message: 'Ошибка генерации чек-листа: ' + errorMessage,
       };
     }
+  }
+
+  /**
+   * Валидирует пути в чек-листе и помечает существующие файлы как [x].
+   */
+  private async validateChecklistPaths(
+    projectPath: string,
+    checklistContent: string
+  ): Promise<{ content: string; markedExisting: number; totalFiles: number; updated: boolean }> {
+    const lines = checklistContent.split('\n');
+    let markedExisting = 0;
+    let totalFiles = 0;
+    let updated = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Ищем строки с чекбоксами: - [ ] `path` или - [x] `path`
+      const match = line.match(/^(\s*)- \[([ x])\] `([^`]+)`/);
+      if (match) {
+        totalFiles++;
+        const [, indent, checkbox, filePath] = match;
+
+        // Проверяем, существует ли файл
+        const fullPath = path.join(projectPath, filePath);
+        const exists = await this.fileSystemService.fileExists(fullPath);
+
+        if (exists && checkbox === ' ') {
+          // Помечаем как существующий
+          lines[i] = `${indent}- [x] \`${filePath}\``;
+          markedExisting++;
+          updated = true;
+        }
+      }
+    }
+
+    return {
+      content: lines.join('\n'),
+      markedExisting,
+      totalFiles,
+      updated
+    };
   }
 
   private async handleExplain(args: string[], selectedCode: string | null): Promise<CommandResult> {
