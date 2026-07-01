@@ -12,6 +12,7 @@ import { IMultiModelManager } from '../interfaces/IMultiModelManager';
 import { HistoryManager } from '../services/HistoryManager';
 import { ConfigManager } from '../services/ConfigManager';
 import { CommandHandler } from '../commands/CommandHandler';
+import { getUserFriendlyMessage } from '../utils/errors';
 
 export interface WebviewMessage {
   type: string;
@@ -308,14 +309,14 @@ export class ChatPanel {
         content: response.content,
       });
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const userFriendlyMessage = getUserFriendlyMessage(error);
       logger.error('Ошибка при обработке сообщения', error, 'ChatPanel');
 
-      await this.historyManager.addMessage('assistant', 'Ошибка: ' + errorMessage);
+      await this.historyManager.addMessage('assistant', '❌ ' + userFriendlyMessage);
 
       this.sendMessage({
         type: 'error',
-        text: errorMessage,
+        text: userFriendlyMessage,
       });
     }
   }

@@ -377,6 +377,11 @@ export class LLMProvider implements ILLMProvider {
               if (endpointType === 'responses') {
                 if (parsed.type === 'response.output_text.delta') {
                   content = parsed.delta;
+                } else if (parsed.type === 'response.completed') {
+                  // Завершение streaming для Responses API
+                  logger.debug('Streaming завершён (response.completed)', 'LLMProvider');
+                } else {
+                  logger.debug(`Неизвестный тип события: ${parsed.type}`, 'LLMProvider');
                 }
               } else if (endpointType === 'chat') {
                 content = parsed.choices?.[0]?.delta?.content;
@@ -389,9 +394,10 @@ export class LLMProvider implements ILLMProvider {
               }
             } catch (error) {
               logger.warn(
-                `Ошибка парсинга chunk: ${error instanceof Error ? error.message : String(error)}`,
+                `Не удалось распарсить chunk: ${dataStr.substring(0, 100)}... Ошибка: ${error instanceof Error ? error.message : String(error)}`,
                 'LLMProvider'
               );
+              // Продолжаем обработку следующих chunks
             }
           }
         }

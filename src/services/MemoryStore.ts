@@ -25,33 +25,66 @@ import { logger } from '../utils/logger';
 export class MemoryStore implements IMemoryStore {
   private db: Database | null = null;
   private dbPath: string = '';
+  private isInitialized: boolean = false;
   private projectPath: string = '';
 
   async initialize(projectPath: string): Promise<void> {
     this.projectPath = projectPath;
-    const devilPath = path.join(projectPath, '.devil');
-    if (!fs.existsSync(devilPath)) {
-      fs.mkdirSync(devilPath, { recursive: true });
+    this.dbPath = path.join(projectPath, '.devil', 'memory.db');
+
+    // Создаём директорию .devil если её нет
+    const devilDir = path.dirname(this.dbPath);
+    if (!fs.existsSync(devilDir)) {
+      fs.mkdirSync(devilDir, { recursive: true });
     }
 
-    this.dbPath = path.join(devilPath, 'memory.db');
+    try {
+      const SQL = await initSqlJs();
 
-    const SQL = await initSqlJs();
+      // Проверяем, существует ли файл БД
+      if (fs.existsSync(this.dbPath)) {
+        try {
+          const fileBuffer = fs.readFileSync(this.dbPath);
+          this.db = new SQL.Database(fileBuffer);
 
-    if (fs.existsSync(this.dbPath)) {
-      const buffer = fs.readFileSync(this.dbPath);
-      this.db = new SQL.Database(buffer);
-      logger.info('БД загружена из ' + this.dbPath, 'MemoryStore');
-    } else {
-      this.db = new SQL.Database();
-      logger.info('Создана новая БД в ' + this.dbPath, 'MemoryStore');
+          // Проверяем целостность БД
+          const integrityCheck = this.db.exec('PRAGMA integrity_check');
+          if (integrityCheck.length === 0 || integrityCheck[0].values[0][0] !== 'ok') {
+            throw new Error('Database integrity check failed');
+          }
+
+          logger.info('База данных загружена успешно', 'MemoryStore');
+        } catch (dbError) {
+          // БД повреждена — auto-recovery
+          logger.error('База данных повреждена, выполняем auto-recovery', dbError, 'MemoryStore');
+
+          // Переименовываем битую БД
+          const corruptedPath = this.dbPath + '.corrupted.' + Date.now();
+          fs.renameSync(this.dbPath, corruptedPath);
+          logger.info('Повреждённая БД переименована в: ' + corruptedPath, 'MemoryStore');
+
+          // Создаём новую БД
+          this.db = new SQL.Database();
+          this.createTables();
+          this.applyMigrations();
+          this.save();
+
+          logger.info('Создана новая база данных', 'MemoryStore');
+        }
+      } else {
+        // БД не существует — создаём новую
+        this.db = new SQL.Database();
+        this.createTables();
+          this.applyMigrations();
+        this.save();
+        logger.info('Создана новая база данных', 'MemoryStore');
+      }
+
+      this.isInitialized = true;
+    } catch (error) {
+      logger.error('Не удалось инициализировать MemoryStore', error, 'MemoryStore');
+      throw error;
     }
-
-    this.createTables();
-    this.applyMigrations();
-    this.save();
-
-    logger.info('MemoryStore инициализирован для проекта: ' + projectPath, 'MemoryStore');
   }
 
   private createTables(): void {
@@ -216,7 +249,7 @@ export class MemoryStore implements IMemoryStore {
       this.db.run('ALTER TABLE change_log_new RENAME TO change_log');
       this.db.run('CREATE INDEX IF NOT EXISTS idx_change_log_project_path ON change_log(project_path)');
       this.db.run('CREATE INDEX IF NOT EXISTS idx_change_log_created_at ON change_log(created_at)');
-      
+
       this.db.run(
         'INSERT INTO migrations (name, applied_at) VALUES (?, ?)',
         ['002_extend_change_log_actions', Date.now()]
@@ -592,14 +625,14 @@ export class MemoryStore implements IMemoryStore {
     if (!this.db) return 0;
 
     const now = Date.now();
-    
+
     // Считаем количество устаревших записей перед удалением
     const countResult = this.db.exec('SELECT COUNT(*) FROM cache WHERE expires_at <= ?', [now]);
     const count = countResult.length > 0 ? (countResult[0].values[0][0] as number) : 0;
-    
+
     this.db.run('DELETE FROM cache WHERE expires_at <= ?', [now]);
     this.save();
-    
+
     return count;
   }
 
