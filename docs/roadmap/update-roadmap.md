@@ -282,6 +282,6 @@
 1. **Сейчас:** Завершить Этап 3 (`/checklist generate` с интеграцией roadmap)
 2. **Далее:** Этап 4 (`/checklist sync`)
 3. **Далее:** Этап 5 (`/roadmap update`)
-4. **После:** DEVOPS-07 (README.md) — Must have для релиза
-5. **В бэклог v1.1:** `/dev generate` как отдельная большая фича
+4. **Далее:** `/dev generate` как отдельная большая фича
+5. **После:** DEVOPS-07 (README.md) — Must have для релиза
 

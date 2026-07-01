@@ -412,24 +412,39 @@
   function initCommandDropdown() {
     console.log('[Devil] Command Dropdown инициализирован');
 
-    var COMMANDS = [
-      { name: '/help', desc: 'Список всех команд и справка' },
-      { name: '/explain', desc: 'Объяснить код файла или выделенного фрагмента' },
-      { name: '/refactor', desc: 'Предложить рефакторинг кода (SOLID, паттерны)' },
-      { name: '/scan', desc: 'Сканировать файл и показать содержимое' },
-      { name: '/search', desc: 'Полнотекстовый поиск по проекту' },
-      { name: '/whereis', desc: 'Найти все использования символа в проекте' },
-      { name: '/diff', desc: 'Получить diff между коммитами Git' },
-      { name: '/git', desc: 'Git-операции (log, status, branch)' },
-      { name: '/roadmap generate', desc: 'Сгенерировать Roadmap проекта' },
-      { name: '/checklist generate', desc: 'Сгенерировать чек-лист файлов' },
-      { name: '/memory show', desc: 'Показать графовую память проекта' },
-      { name: '/memory add', desc: 'Добавить узел в графовую память' },
-      { name: '/memory delete', desc: 'Удалить узел из графовой памяти' },
-      { name: '/rebuild', desc: 'Перестроить индекс поиска' },
-      { name: '/lint', desc: 'Запустить линтер и показать отчёт' },
-      { name: '/test generate', desc: 'Сгенерировать юнит-тесты для файла (или /test <путь>)' },
-    ];
+var COMMANDS = [
+  // Справка
+  { name: '/help', desc: 'Список всех команд и справка' },
+
+  // Анализ кода
+  { name: '/explain', desc: 'Объяснить код файла или выделенного фрагмента' },
+  { name: '/refactor', desc: 'Предложить рефакторинг кода (SOLID, паттерны)' },
+  { name: '/scan', desc: 'Сканировать файл и показать содержимое' },
+
+  // Поиск
+  { name: '/search', desc: 'Полнотекстовый поиск по проекту' },
+  { name: '/whereis', desc: 'Найти все использования символа в проекте' },
+
+  // Генерация
+  { name: '/roadmap generate', desc: 'Сгенерировать Roadmap проекта' },
+  { name: '/roadmap update', desc: 'Перегенерировать Roadmap с сохранением истории' },
+  { name: '/checklist generate', desc: 'Сгенерировать чек-лист на основе Roadmap' },
+  { name: '/checklist sync', desc: 'Синхронизировать чек-лист с реальной структурой проекта' },
+  { name: '/test generate', desc: 'Сгенерировать юнит-тесты для файла (или /test <путь>)' },
+
+  // Git
+  { name: '/diff', desc: 'Получить diff между коммитами Git' },
+  { name: '/git', desc: 'Git-операции (log, status, branch)' },
+
+  // Память
+  { name: '/memory show', desc: 'Показать графовую память проекта' },
+  { name: '/memory add', desc: 'Добавить узел в графовую память' },
+  { name: '/memory delete', desc: 'Удалить узел из графовой памяти' },
+
+  // Инструменты
+  { name: '/lint', desc: 'Запустить линтер и показать отчёт' },
+  { name: '/rebuild', desc: 'Перестроить индекс поиска и граф' },
+];
 
     var commandButton = document.getElementById('commandButton');
     var commandDropdown = document.getElementById('commandDropdown');
