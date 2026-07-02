@@ -4,7 +4,7 @@ import { FileSystemService } from '../services/FileSystemService';
 import { LLMProvider } from '../services/LLMProvider';
 import { ContextBuilder } from '../services/ContextBuilder';
 import { IProjectManager } from '../interfaces/IProjectManager';
-import { IMemoryStore } from '../interfaces/IMemoryStore';
+import { IMemoryStore, NodeType } from '../interfaces/IMemoryStore';
 import { GitService } from '../services/GitService';
 import { SearchIndex } from '../services/SearchIndex';
 import { GraphBuilder } from '../services/GraphBuilder';
@@ -1929,14 +1929,33 @@ export class CommandHandler {
   }
 
   private async handleMemory(args: string[]): Promise<CommandResult> {
-    if (args.length === 0 || args[0] !== 'show') {
+    if (args.length === 0) {
       return {
         success: false,
         message:
-          'Использование: /memory show\n\nПоказать графовую память проекта в табличном виде.',
+          'Использование:\n' +
+          '- `/memory show` — показать графовую память проекта\n' +
+          '- `/memory add <текст>` — добавить запись в память\n' +
+          '- `/memory delete <id>` — удалить узел из памяти',
       };
     }
 
+    switch (args[0]) {
+      case 'show':
+        return await this.handleMemoryShow();
+      case 'add':
+        return await this.handleMemoryAdd(args.slice(1));
+      case 'delete':
+        return await this.handleMemoryDelete(args.slice(1));
+      default:
+        return {
+          success: false,
+          message: `Неизвестная подкоманда: /memory ${args[0]}`,
+        };
+    }
+  }
+
+  private async handleMemoryShow(): Promise<CommandResult> {
     try {
       const nodes = await this.memoryStore.findNodes({ limit: 200 });
 
@@ -1968,25 +1987,23 @@ export class CommandHandler {
         interface: 'Интерфейсы',
         type: 'Типы',
         variable: 'Переменные',
+        technology: 'Технологии',
+        decision: 'Решения',
+        concept: 'Концепции',
       };
 
       for (const [type, typeNodes] of Object.entries(byType)) {
         const label = typeLabels[type] || type;
         lines.push('### ' + label + ' (' + typeNodes.length + ')');
         lines.push('');
-        lines.push('| Имя | Путь |');
-        lines.push('|-----|------|');
+        lines.push('| ID | Имя | Путь |');
+        lines.push('|-----|------|------|');
 
         for (const node of typeNodes.slice(0, 20)) {
           const name = node.name || '';
           const path = node.path || '';
-          lines.push('| `' + name + '` | `' + path + '` |');
+          lines.push('| `' + node.id.substring(0, 8) + '...` | ' + name + ' | ' + path + ' |');
         }
-
-        if (typeNodes.length > 20) {
-          lines.push('| ... | и ещё ' + (typeNodes.length - 20) + ' |');
-        }
-
         lines.push('');
       }
 
@@ -2000,6 +2017,84 @@ export class CommandHandler {
       return {
         success: false,
         message: 'Ошибка получения памяти: ' + errorMessage,
+      };
+    }
+  }
+
+  private async handleMemoryAdd(args: string[]): Promise<CommandResult> {
+    if (args.length === 0) {
+      return {
+        success: false,
+        message: 'Использование: /memory add <текст записи>\n\nПример: /memory add React используется для UI',
+      };
+    }
+
+    const text = args.join(' ');
+
+    try {
+      // Определяем тип узла на основе содержимого
+      let nodeType: NodeType = 'concept';
+
+      // Простая эвристика для определения типа
+      if (text.toLowerCase().includes('технология') || text.toLowerCase().includes('библиотека')) {
+        nodeType = 'technology' as NodeType;
+      } else if (text.toLowerCase().includes('решение') || text.toLowerCase().includes('архитектур')) {
+        nodeType = 'decision' as NodeType;
+      }
+
+      const nodeId = await this.memoryStore.addNode({
+        type: nodeType,
+        name: text.substring(0, 50), // Ограничиваем длину имени
+        path: '',
+        metadata: { content: text, source: 'manual' },
+        tags: ['user-added']
+      });
+
+      return {
+        success: true,
+        message:
+          '✅ Запись добавлена в графовую память\n\n' +
+          `**ID:** \`${nodeId.substring(0, 8)}...\`\n` +
+          `**Тип:** ${nodeType}\n` +
+          `**Содержание:** ${text}\n\n` +
+          'Используйте `/memory show` для просмотра всех записей.',
+        data: { nodeId, type: nodeType, content: text },
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: 'Ошибка добавления записи: ' + errorMessage,
+      };
+    }
+  }
+
+  private async handleMemoryDelete(args: string[]): Promise<CommandResult> {
+    if (args.length === 0) {
+      return {
+        success: false,
+        message: 'Использование: /memory delete <id>\n\nПример: /memory delete 550e8400-e29b',
+      };
+    }
+
+    const nodeId = args[0];
+
+    try {
+      await this.memoryStore.deleteNode(nodeId);
+
+      return {
+        success: true,
+        message:
+          '✅ Узел удалён из графовой памяти\n\n' +
+          `**ID:** \`${nodeId}\`\n\n` +
+          'Используйте `/memory show` для просмотра оставшихся записей.',
+        data: { nodeId },
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: 'Ошибка удаления узла: ' + errorMessage,
       };
     }
   }
