@@ -1,10 +1,9 @@
 import * as path from 'path';
-import * as crypto from 'crypto';
 import { FileSystemService } from './FileSystemService';
 import { LLMProvider } from './LLMProvider';
 import { ProjectManager } from './ProjectManager';
 import { ContextBuilder } from './ContextBuilder';
-import { DevPlan, DevStep, DevPlanGenerationResult, DevStepType } from '../interfaces/IDevPlan';
+import { DevPlan, DevStep, DevPlanGenerationResult } from '../interfaces/IDevPlan';
 import { InterviewData, validateInterview } from '../interfaces/IInterview';
 import { logger } from '../utils/logger';
 

@@ -1,10 +1,11 @@
 import * as path from 'path';
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 import { FileSystemService } from './FileSystemService';
 import { LLMProvider } from './LLMProvider';
 import { ContextBuilder } from './ContextBuilder';
 import { DevPlanManager } from './DevPlanManager';
-import { DevStep, DevStepExecutionResult, DevStepType } from '../interfaces/IDevPlan';
+import { DevStep, DevStepExecutionResult } from '../interfaces/IDevPlan';
 import { logger } from '../utils/logger';
 
 
@@ -33,7 +34,7 @@ export class DevPlanExecutor {
     if (!plan) {
       return {
         success: false,
-        error: 'План разработки не найден. Выполните /dev generate'
+        error: 'План разработки не найден. Выполните /dev generate',
       };
     }
 
@@ -41,7 +42,7 @@ export class DevPlanExecutor {
     if (!nextStep) {
       return {
         success: false,
-        error: 'Все шаги выполнены или заблокированы зависимостями'
+        error: 'Все шаги выполнены или заблокированы зависимостями',
       };
     }
 
@@ -69,7 +70,7 @@ export class DevPlanExecutor {
         default:
           result = {
             success: false,
-            error: `Неизвестный тип шага: ${(nextStep as DevStep).type}`
+            error: `Неизвестный тип шага: ${(nextStep as DevStep).type}`,
           };
       }
 
@@ -91,7 +92,7 @@ export class DevPlanExecutor {
 
       return {
         success: false,
-        error: errorMessage
+        error: errorMessage,
       };
     }
   }
@@ -99,7 +100,10 @@ export class DevPlanExecutor {
   /**
    * Создаёт директорию
    */
-  private async createDirectory(step: DevStep, projectPath: string): Promise<DevStepExecutionResult> {
+  private async createDirectory(
+    step: DevStep,
+    projectPath: string
+  ): Promise<DevStepExecutionResult> {
     const dirPath = path.join(projectPath, step.path);
 
     try {
@@ -110,13 +114,13 @@ export class DevPlanExecutor {
         success: true,
         step,
         message: `✅ Директория создана: \`${step.path}\``,
-        commands: []
+        commands: [],
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        error: `Не удалось создать директорию: ${errorMessage}`
+        error: `Не удалось создать директорию: ${errorMessage}`,
       };
     }
   }
@@ -151,6 +155,15 @@ export class DevPlanExecutor {
       await fs.promises.writeFile(filePath, code);
       logger.info(`Файл создан: ${step.path}`, 'DevPlanExecutor');
 
+      // Автоформатирование через Prettier (если установлен)
+      try {
+        // execSync будет импортирован через import
+        execSync(`npx prettier --write "${filePath}"`, { stdio: 'pipe' });
+        logger.info(`Файл отформатирован: ${step.path}`, 'DevPlanExecutor');
+      } catch (error) {
+        logger.warn('Prettier не установлен, пропускаем форматирование', 'DevPlanExecutor');
+      }
+
       // Формируем команды для проверки
       const commands = this.generateCommandsForFile(step.path);
 
@@ -159,13 +172,13 @@ export class DevPlanExecutor {
         step,
         message: `✅ Файл создан: \`${step.path}\`\n\n${step.description}`,
         backupPath,
-        commands
+        commands,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        error: `Не удалось создать файл: ${errorMessage}`
+        error: `Не удалось создать файл: ${errorMessage}`,
       };
     }
   }
@@ -195,13 +208,13 @@ export class DevPlanExecutor {
         step,
         message: `✅ Файл обновлён: \`${step.path}\``,
         backupPath,
-        commands
+        commands,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        error: `Не удалось обновить файл: ${errorMessage}`
+        error: `Не удалось обновить файл: ${errorMessage}`,
       };
     }
   }
@@ -226,13 +239,13 @@ export class DevPlanExecutor {
         step,
         message: `✅ Файл удалён: \`${step.path}\``,
         backupPath,
-        commands: []
+        commands: [],
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        error: `Не удалось удалить файл: ${errorMessage}`
+        error: `Не удалось удалить файл: ${errorMessage}`,
       };
     }
   }
@@ -247,7 +260,7 @@ export class DevPlanExecutor {
         includeProjectStructure: true,
         includeRoadmap: true,
         includeChecklist: true,
-        includeMemoryGraph: true
+        includeMemoryGraph: true,
       }
     );
 
@@ -272,7 +285,7 @@ export class DevPlanExecutor {
 
     const response = await this.llmProvider.generate(prompt, {
       systemPrompt: context.systemPrompt,
-      maxTokens: 10000
+      maxTokens: 10000,
     });
 
     // 🔍 Автоматическая очистка от markdown-обёрток, если LLM проигнорировал инструкцию

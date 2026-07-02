@@ -49,6 +49,7 @@
     "axios": "^1.18.1",
     "flexsearch": "^0.8.212",
     "highlight.js": "^11.11.1",
+    "keytar": "^7.9.0",
     "marked": "^18.0.5",
     "sql.js": "^1.14.1"
   },
@@ -99,7 +100,7 @@
       "properties": {
         "devil.baseUrl": {
           "type": "string",
-          "default": "https://api.openai.com/v1",
+          "default": "http://localhost:11434/v1",
           "description": "Base URL для LLM API (OpenAI-совместимый). Примеры: https://api.openai.com/v1, https://api.myproxyapi.ru/v1, http://localhost:11434/v1 (для Ollama)"
         },
         "devil.apiKey": {
@@ -109,7 +110,7 @@
         },
         "devil.model": {
           "type": "string",
-          "default": "gpt-4o-mini",
+          "default": "llama3",
           "description": "Модель LLM по умолчанию. Примеры: gpt-4o, gpt-4o-mini, claude-3-5-sonnet, llama3"
         },
         "devil.maxRetries": {

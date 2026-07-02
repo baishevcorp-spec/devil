@@ -451,7 +451,7 @@ export class CommandHandler {
       await this.updateInterviewStatus(project, 'roadmap_generated');
 
       const message =
-        `✅ Roadmap обновлён и сохранён в \`.devil/roadmap.md\`\n\n` +
+        '✅ Roadmap обновлён и сохранён в `.devil/roadmap.md`\n\n' +
         `📦 **Предыдущая версия сохранена:** \`${backupPath}\`\n\n` +
         `📊 **Версия:** v${versionNumber + 1}\n\n` +
         response.content;
@@ -809,7 +809,7 @@ export class CommandHandler {
       prompt += '   - Путь к файлу (относительно корня проекта)\n';
       prompt += '   - Краткое описание назначения (1 предложение)\n';
       prompt += '3. Используй формат с чекбоксами:\n';
-      prompt += '   `- [ ] \`путь/к/файлу\` — описание`\n\n';
+      prompt += '   `- [ ] `путь/к/файлу` — описание`\n\n';
       prompt += '4. Если файл уже существует в проекте, пометь его как `[x]` вместо `[ ]`\n';
       prompt += '5. Будь конкретным и практичным\n\n';
       prompt += 'Отвечай на русском языке.';
@@ -894,7 +894,7 @@ export class CommandHandler {
 
       const message =
         '✅ Чек-лист синхронизирован с реальной структурой проекта\n\n' +
-        `📊 **Отчёт:**\n` +
+        '📊 **Отчёт:**\n' +
         `- Всего элементов: ${result.totalItems}\n` +
         `- ${result.report}\n\n` +
         result.content;
