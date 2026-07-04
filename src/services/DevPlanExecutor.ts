@@ -8,7 +8,6 @@ import { DevPlanManager } from './DevPlanManager';
 import { DevStep, DevStepExecutionResult } from '../interfaces/IDevPlan';
 import { logger } from '../utils/logger';
 
-
 /**
  * DevPlanExecutor — сервис для выполнения шагов плана разработки
  *
@@ -18,6 +17,23 @@ import { logger } from '../utils/logger';
  * - Генерацию кода через LLM
  * - Обновление статуса шага
  */
+
+/**
+ * Контекст reference-файлов для генерации
+ */
+interface ReferenceContext {
+  loaded: ReferenceFile[];
+  missing: string[];
+}
+
+/**
+ * Загруженный reference-файл
+ */
+interface ReferenceFile {
+  path: string;
+  content: string;
+}
+
 export class DevPlanExecutor {
   constructor(
     private fileSystemService: FileSystemService,
@@ -144,8 +160,11 @@ export class DevPlanExecutor {
         logger.info(`Создан бэкап: ${backupPath}`, 'DevPlanExecutor');
       }
 
-      // Генерируем код через LLM
-      const code = await this.generateCodeForFile(step);
+      // Загружаем reference-файлы
+      const refContext = await this.loadReferenceFiles(step, projectPath);
+
+      // Генерируем код через LLM с учётом reference-файлов
+      const code = await this.generateCodeForFile(step, refContext);
 
       // Создаём директорию если нужно
       const dirPath = path.dirname(filePath);
@@ -167,10 +186,18 @@ export class DevPlanExecutor {
       // Формируем команды для проверки
       const commands = this.generateCommandsForFile(step.path);
 
+      // Формируем сообщение с отчётом о reference-файлах
+      let message = `✅ Файл создан: \`${step.path}\`\n\n${step.description}`;
+
+      const refReport = this.formatReferenceReport(refContext);
+      if (refReport) {
+        message += '\n\n' + refReport;
+      }
+
       return {
         success: true,
         step,
-        message: `✅ Файл создан: \`${step.path}\`\n\n${step.description}`,
+        message,
         backupPath,
         commands,
       };
@@ -195,8 +222,11 @@ export class DevPlanExecutor {
       const backupPath = `${filePath}.${timestamp}.bak`;
       await fs.promises.copyFile(filePath, backupPath);
 
+      // Загружаем reference-файлы
+      const refContext = await this.loadReferenceFiles(step, projectPath);
+
       // Генерируем новый код
-      const code = await this.generateCodeForFile(step);
+      const code = await this.generateCodeForFile(step, refContext);
 
       // Записываем файл
       await fs.promises.writeFile(filePath, code);
@@ -251,9 +281,70 @@ export class DevPlanExecutor {
   }
 
   /**
+   * Загружает содержимое reference-файлов для шага.
+   * Объединяет globalReferences и step.referenceFiles с дедупликацией.
+   */
+  private async loadReferenceFiles(step: DevStep, projectPath: string): Promise<ReferenceContext> {
+    const plan = this.devPlanManager.getCurrentPlan();
+
+    const allPaths = [...(plan?.globalReferences || []), ...(step.referenceFiles || [])];
+
+    // Дедупликация
+    const uniquePaths = [...new Set(allPaths)];
+
+    const loaded: ReferenceFile[] = [];
+    const missing: string[] = [];
+
+    for (const refPath of uniquePaths) {
+      const fullPath = path.join(projectPath, refPath);
+      const exists = await this.fileSystemService.fileExists(fullPath);
+
+      if (exists) {
+        try {
+          const content = await this.fileSystemService.readFile(fullPath);
+          loaded.push({ path: refPath, content });
+          logger.info(`Reference-файл загружен: ${refPath}`, 'DevPlanExecutor');
+        } catch (error) {
+          logger.error(`Ошибка чтения reference-файла: ${refPath}`, error, 'DevPlanExecutor');
+          missing.push(refPath);
+        }
+      } else {
+        missing.push(refPath);
+        logger.warn(`Reference-файл не найден: ${refPath}`, 'DevPlanExecutor');
+      }
+    }
+
+    return { loaded, missing };
+  }
+
+  /**
+   * Формирует сообщение о загруженных reference-файлах для чата.
+   */
+  private formatReferenceReport(refContext: ReferenceContext): string {
+    const lines: string[] = [];
+
+    if (refContext.loaded.length > 0) {
+      lines.push('📚 **Учтены reference-файлы:**');
+      for (const file of refContext.loaded) {
+        const sizeKB = (file.content.length / 1024).toFixed(1);
+        lines.push(`  ✅ \`${file.path}\` (${sizeKB} КБ)`);
+      }
+    }
+
+    if (refContext.missing.length > 0) {
+      lines.push('\n⚠️ **Отсутствующие reference-файлы:**');
+      for (const path of refContext.missing) {
+        lines.push(`  ❌ \`${path}\``);
+      }
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
    * Генерирует код для файла через LLM
    */
-  private async generateCodeForFile(step: DevStep): Promise<string> {
+  private async generateCodeForFile(step: DevStep, refContext: ReferenceContext): Promise<string> {
     const context = await this.contextBuilder.buildContext(
       `Сгенерируй код для файла: ${step.path}. ${step.description}`,
       {
@@ -264,39 +355,63 @@ export class DevPlanExecutor {
       }
     );
 
-    const prompt = `Создай ПРОДАКШЕН-ГОТОВЫЙ код для файла \`${step.path}\`.
+    let prompt = '';
 
-**Описание:** ${step.description}
+    // 1. Reference-файлы (контекст)
+    if (refContext.loaded.length > 0) {
+      prompt += '# 📚 Контекст проекта (reference-файлы)\n\n';
+      prompt += '**ОБЯЗАТЕЛЬНО учитывай эти файлы при генерации кода.**\n\n';
 
-⛔ СТРОГИЕ ЗАПРЕТЫ (нарушение = ошибка):
-- НИКАКОГО \`any\`. Используй точные типы, интерфейсы, \`unknown\` или дженерики.
-- НИКАКИХ неиспользуемых переменных. Если переменная не используется, убери её или префиксируй с \`_\`.
-- НИКАКОГО \`console.log\`, \`console.warn\`, \`console.error\` в готовом коде.
-- НИКАКИХ синтаксических ошибок в JSX/TSX (правильные закрывающие теги, типы пропсов).
-- Соблюдай форматирование Prettier: точки с запятой, запятые после последних элементов, правильные отступы.
+      for (const file of refContext.loaded) {
+        prompt += `## ${file.path}\n\n`;
+        prompt += '```\n';
+        prompt += file.content;
+        prompt += '\n```\n\n---\n\n';
+      }
+    }
 
-✅ ОБЯЗАТЕЛЬНО:
-- Строгая типизация TypeScript
-- Функциональные компоненты React с явными типами пропсов
-- Корректная обработка ошибок (try/catch с использованием \`err\`)
-- Чистый код без лишних комментариев
+    // 2. Задача
+    prompt += `# Задача\n\n`;
+    prompt += `Создай ПРОДАКШЕН-ГОТОВЫЙ код для файла \`${step.path}\`.\n\n`;
+    prompt += `**Описание:** ${step.description}\n\n`;
 
-Верни ТОЛЬКО содержимое файла. НЕ оборачивай код в \`\`\`typescript или другие markdown-блоки.`;
+    // 3. Context hints (дополнительные указания)
+    if (step.contextHints && Object.keys(step.contextHints).length > 0) {
+      prompt += `# Дополнительные указания\n\n`;
+      for (const [key, value] of Object.entries(step.contextHints)) {
+        prompt += `- **${key}:** ${value}\n`;
+      }
+      prompt += '\n';
+    }
+
+    // 4. Строгие требования (сохраняем существующие)
+    prompt += '⛔ **СТРОГИЕ ЗАПРЕТЫ (нарушение = ошибка):**\n';
+    prompt += '- НИКАКОГО `any`. Используй точные типы, интерфейсы, `unknown` или дженерики.\n';
+    prompt +=
+      '- НИКАКИХ неиспользуемых переменных. Если переменная не используется, убери её или префиксируй с `_`.\n';
+    prompt += '- НИКАКОГО `console.log`, `console.warn`, `console.error` в готовом коде.\n';
+    prompt +=
+      '- НИКАКИХ синтаксических ошибок в JSX/TSX (правильные закрывающие теги, типы пропсов).\n';
+    prompt +=
+      '- Соблюдай форматирование Prettier: точки с запятой, запятые после последних элементов, правильные отступы.\n\n';
+
+    prompt += '✅ **ОБЯЗАТЕЛЬНО:**\n';
+    prompt += '- Строгая типизация TypeScript\n';
+    prompt += '- Функциональные компоненты React с явными типами пропсов (если это React-файл)\n';
+    prompt += '- Корректная обработка ошибок (try/catch с использованием `err`)\n';
+    prompt += '- Чистый код без лишних комментариев\n';
+    prompt +=
+      '- **Следуй принципам и паттернам из reference-файлов** (цвета, отступы, именование)\n\n';
+
+    prompt +=
+      'Верни ТОЛЬКО содержимое файла. НЕ оборачивай код в ```typescript или другие markdown-блоки.';
 
     const response = await this.llmProvider.generate(prompt, {
       systemPrompt: context.systemPrompt,
-      maxTokens: 10000,
+      maxTokens: 4000,
     });
 
-    // 🔍 Автоматическая очистка от markdown-обёрток, если LLM проигнорировал инструкцию
-    let code = response.content;
-    const codeBlockRegex = /```(?:typescript|tsx|js|jsx|ts)?\n([\s\S]*?)```/g;
-    const match = codeBlockRegex.exec(code);
-    if (match) {
-      code = match[1].trim();
-    }
-
-    return code;
+    return response.content;
   }
 
   /**
