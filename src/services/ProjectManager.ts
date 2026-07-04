@@ -15,21 +15,21 @@ export interface FileChangeEvent {
 
 /**
  * ProjectManager — сервис управления текущим проектом.
- * 
+ *
  * Отвечает за:
  * - Хранение информации о текущем workspaceFolder
  * - Инициализацию служебной директории .devil/
  * - Сканирование структуры проекта
  * - Отслеживание изменений файлов через FileSystemWatcher
- * 
+ *
  * @example
  * ```typescript
  * const projectManager = new ProjectManager(fileSystemService);
  * await projectManager.initialize();
- * 
+ *
  * const project = projectManager.getCurrentProject();
  * console.log(project.name); // "my-project"
- * 
+ *
  * projectManager.onFileChanged((event) => {
  *   console.log(`File ${event.type}: ${event.path}`);
  * });
@@ -53,18 +53,25 @@ export class ProjectManager implements IProjectManager {
 
     // Получаем текущий workspace folder
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    
+
     if (!workspaceFolder) {
       logger.warn('Проект не открыт. Ожидание команды devil.openProject', 'ProjectManager');
       return;
     }
 
     await this.setProject(workspaceFolder);
+
+    // Создаём папку .devil/references/ для reference-файлов
+    if (this.currentProject) {
+      const refsPath = path.join(this.currentProject.devilPath, 'references');
+      await this.fileSystemService.ensureDirectory(refsPath);
+      logger.info('Папка .devil/references/ создана/проверена', 'ProjectManager');
+    }
   }
 
   /**
    * Устанавливает текущий проект.
-   * 
+   *
    * @param folder - Workspace folder из VS Code
    * @throws ProjectError если не удалось инициализировать проект
    */
@@ -82,7 +89,7 @@ export class ProjectManager implements IProjectManager {
       const structure = await this.fileSystemService.scanDirectory(projectPath, {
         excludePatterns: ['.git', 'node_modules', 'out', 'backups', '.devil', 'coverage'],
         maxDepth: 10,
-        includeContent: false
+        includeContent: false,
       });
 
       // Подсчитываем количество файлов
@@ -93,7 +100,7 @@ export class ProjectManager implements IProjectManager {
         path: projectPath,
         devilPath,
         fileCount,
-        structure
+        structure,
       };
 
       // Настраиваем FileSystemWatcher
@@ -112,7 +119,7 @@ export class ProjectManager implements IProjectManager {
 
   /**
    * Возвращает информацию о текущем проекте.
-   * 
+   *
    * @returns ProjectInfo или null, если проект не открыт
    */
   getCurrentProject(): ProjectInfo | null {
@@ -121,7 +128,7 @@ export class ProjectManager implements IProjectManager {
 
   /**
    * Возвращает путь к служебной директории .devil/.
-   * 
+   *
    * @returns Абсолютный путь или null, если проект не открыт
    */
   getDevilPath(): string | null {
@@ -130,7 +137,7 @@ export class ProjectManager implements IProjectManager {
 
   /**
    * Возвращает структуру проекта.
-   * 
+   *
    * @returns FileTree или null, если проект не открыт
    */
   getProjectStructure(): FileTree | null {
@@ -139,7 +146,7 @@ export class ProjectManager implements IProjectManager {
 
   /**
    * Регистрирует слушателя изменений файлов.
-   * 
+   *
    * @param listener - Функция, вызываемая при изменении файла
    * @returns Disposable для отписки
    */
@@ -165,7 +172,7 @@ export class ProjectManager implements IProjectManager {
     const structure = await this.fileSystemService.scanDirectory(this.currentProject.path, {
       excludePatterns: ['.git', 'node_modules', 'out', 'backups', '.devil', 'coverage'],
       maxDepth: 10,
-      includeContent: false
+      includeContent: false,
     });
 
     const fileCount = this.countFiles(structure);
@@ -173,7 +180,7 @@ export class ProjectManager implements IProjectManager {
     this.currentProject = {
       ...this.currentProject,
       structure,
-      fileCount
+      fileCount,
     };
 
     logger.info(`Структура обновлена: ${fileCount} файлов`, 'ProjectManager');
@@ -217,12 +224,12 @@ export class ProjectManager implements IProjectManager {
     if (existingTimer) {
       clearTimeout(existingTimer);
     }
-    
+
     const timer = setTimeout(() => {
       this.debounceTimers.delete(filePath);
       this.processFileChange(type, filePath);
     }, 500);
-    
+
     this.debounceTimers.set(filePath, timer);
   }
 

@@ -27,6 +27,8 @@ export interface DevStep {
   backupPath?: string;
   commands?: string[];
   metadata?: Record<string, unknown>;
+  referenceFiles?: string[];
+  contextHints?: Record<string, string>;
 }
 
 /**
@@ -45,6 +47,7 @@ export interface DevPlan {
     roadmapContent?: string | null;
     checklistContent?: string | null;
   };
+  globalReferences?: string[];
 }
 
 /**

@@ -137,7 +137,7 @@ export interface GenerateOptions {
 
   /**
    * Таймаут запроса в миллисекундах.
-   * @default 60000 (60 секунд)
+   * @default 120000 (60 секунд)
    */
   timeout?: number;
 

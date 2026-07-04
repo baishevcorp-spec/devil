@@ -80,7 +80,7 @@ export class DevPlanManager {
     if (!project) {
       return {
         success: false,
-        error: 'Проект не открыт'
+        error: 'Проект не открыт',
       };
     }
 
@@ -90,19 +90,22 @@ export class DevPlanManager {
       // 1. Собираем контекст
       const context = await this.collectContext(project.devilPath);
 
-      // 2. Формируем промпт для LLM
+      // 2. Сканируем reference-файлы
+      const globalReferences = await this.scanReferencesDirectory();
+
+      // 3. Формируем промпт для LLM
       const prompt = this.buildGenerationPrompt(context);
 
-      // 3. Генерируем план через LLM
+      // 4. Генерируем план через LLM
       const response = await this.llmProvider.generate(prompt, {
         systemPrompt: context.systemPrompt,
-        maxTokens: 8000
+        maxTokens: 8000,
       });
 
-      // 4. Парсим ответ LLM в структуру DevPlan
+      // 5. Парсим ответ LLM в структуру DevPlan
       const steps = this.parseLLMResponse(response.content);
 
-      // 5. Создаём объект плана
+      // 6. Создаём объект плана
       const plan: DevPlan = {
         version: 1,
         createdAt: Date.now(),
@@ -114,26 +117,33 @@ export class DevPlanManager {
         context: {
           interviewData: context.interviewData,
           roadmapContent: context.roadmapContent,
-          checklistContent: context.checklistContent
-        }
+          checklistContent: context.checklistContent,
+        },
+        globalReferences, // Новое поле
       };
+
+      // 7. Автоматическое назначение referenceFiles для UI-шагов
+      this.assignReferencesToSteps(plan);
 
       this.currentPlan = plan;
       await this.savePlan();
 
-      logger.info(`План сгенерирован: ${steps.length} шагов`, 'DevPlanManager');
+      logger.info(
+        `План сгенерирован: ${steps.length} шагов, ${globalReferences.length} reference-файлов`,
+        'DevPlanManager'
+      );
 
       return {
         success: true,
         plan,
-        message: `✅ План разработки сгенерирован (${steps.length} шагов)`
+        message: `✅ План разработки сгенерирован (${steps.length} шагов, ${globalReferences.length} reference-файлов)`,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error('Ошибка генерации плана', error, 'DevPlanManager');
       return {
         success: false,
-        error: errorMessage
+        error: errorMessage,
       };
     }
   }
@@ -182,14 +192,14 @@ export class DevPlanManager {
       includeRoadmap: true,
       includeChecklist: true,
       includeMemoryGraph: true,
-      includeUserProfile: true
+      includeUserProfile: true,
     });
 
     return {
       interviewData,
       roadmapContent,
       checklistContent,
-      systemPrompt: systemPrompt.systemPrompt
+      systemPrompt: systemPrompt.systemPrompt,
     };
   }
 
@@ -208,7 +218,7 @@ export class DevPlanManager {
       prompt += '## Информация о проекте\n\n';
       prompt += `**Название:** ${context.interviewData.projectName}\n`;
       prompt += `**Описание:** ${context.interviewData.description}\n`;
-      prompt += `**Цели:**\n${context.interviewData.goals.map(g => `- ${g}`).join('\n')}\n`;
+      prompt += `**Цели:**\n${context.interviewData.goals.map((g) => `- ${g}`).join('\n')}\n`;
       prompt += `**Технологии:** ${context.interviewData.techStack.join(', ')}\n`;
       prompt += `**Целевая аудитория:** ${context.interviewData.targetAudience}\n`;
       prompt += `**Сроки:** ${context.interviewData.deadlines}\n\n`;
@@ -233,7 +243,8 @@ export class DevPlanManager {
     prompt += '4. Включай в план только то, что нужно создать с нуля.\n\n';
     prompt += 'Каждый шаг должен иметь:\n';
     prompt += '- `id`: номер шага (начинается с 1)\n';
-    prompt += '- `type`: тип шага ("create_directory", "create_file", "modify_file", "delete_file")\n';
+    prompt +=
+      '- `type`: тип шага ("create_directory", "create_file", "modify_file", "delete_file")\n';
     prompt += '- `path`: путь к файлу/директории (относительно корня проекта)\n';
     prompt += '- `description`: краткое описание того, что нужно сделать\n';
     prompt += '- `dependencies`: массив ID шагов, от которых зависит этот шаг (опционально)\n\n';
@@ -277,7 +288,7 @@ export class DevPlanManager {
         return steps.map((step, index) => ({
           ...step,
           id: step.id || index + 1,
-          status: 'pending' as const
+          status: 'pending' as const,
         }));
       }
 
@@ -286,7 +297,7 @@ export class DevPlanManager {
       return steps.map((step, index) => ({
         ...step,
         id: step.id || index + 1,
-        status: 'pending' as const
+        status: 'pending' as const,
       }));
     } catch (error) {
       logger.error('Не удалось парсить ответ LLM', error, 'DevPlanManager');
@@ -307,13 +318,13 @@ export class DevPlanManager {
   getNextStep(): DevStep | null {
     if (!this.currentPlan) return null;
 
-    const pendingStep = this.currentPlan.steps.find(step => {
+    const pendingStep = this.currentPlan.steps.find((step) => {
       if (step.status !== 'pending') return false;
 
       // Проверяем зависимости
       if (step.dependencies && step.dependencies.length > 0) {
-        return step.dependencies.every(depId => {
-          const depStep = this.currentPlan!.steps.find(s => s.id === depId);
+        return step.dependencies.every((depId) => {
+          const depStep = this.currentPlan!.steps.find((s) => s.id === depId);
           return depStep && depStep.status === 'completed';
         });
       }
@@ -325,6 +336,78 @@ export class DevPlanManager {
   }
 
   /**
+   * Сканирование папки .devil/references/
+   * Возвращает список путей к reference-файлам
+   */
+  private async scanReferencesDirectory(): Promise<string[]> {
+    const project = this.projectManager.getCurrentProject();
+    if (!project) return [];
+
+    const refsPath = path.join(project.devilPath, 'references');
+    const exists = await this.fileSystemService.fileExists(refsPath);
+
+    if (!exists) {
+      logger.info('Папка .devil/references/ не найдена', 'DevPlanManager');
+      return [];
+    }
+
+    try {
+      const tree = await this.fileSystemService.scanDirectory(refsPath, {
+        maxDepth: 1,
+        includeContent: false,
+      });
+
+      const files: string[] = [];
+      if (tree.children) {
+        for (const child of tree.children) {
+          if (child.type === 'file' && child.name.endsWith('.md')) {
+            files.push(path.join('.devil/references', child.name));
+          }
+        }
+      }
+
+      logger.info(`Найдено ${files.length} reference-файлов`, 'DevPlanManager');
+      return files;
+    } catch (error) {
+      logger.error('Ошибка сканирования .devil/references/', error, 'DevPlanManager');
+      return [];
+    }
+  }
+
+  /**
+   * Автоматическое назначение referenceFiles для шагов на основе типа
+   * UI-компоненты автоматически получают brand-dna.md и design-system.md
+   */
+  private assignReferencesToSteps(plan: DevPlan): void {
+    const brandDnaPath = '.devil/references/brand-dna.md';
+    const designSystemPath = '.devil/references/design-system.md';
+
+    for (const step of plan.steps) {
+      // UI-компоненты → brand-dna.md + design-system.md
+      if (this.isUIComponent(step.path)) {
+        step.referenceFiles = step.referenceFiles || [];
+
+        if (!step.referenceFiles.includes(brandDnaPath)) {
+          step.referenceFiles.push(brandDnaPath);
+        }
+        if (!step.referenceFiles.includes(designSystemPath)) {
+          step.referenceFiles.push(designSystemPath);
+        }
+      }
+    }
+
+    logger.info('Reference-файлы назначены для UI-компонентов', 'DevPlanManager');
+  }
+
+  /**
+   * Проверка, является ли файл UI-компонентом
+   */
+  private isUIComponent(filePath: string): boolean {
+    const uiPatterns = [/components\//i, /ui\//i, /\.tsx$/i, /\.jsx$/i, /\.vue$/i];
+    return uiPatterns.some((pattern) => pattern.test(filePath));
+  }
+
+  /**
    * Обновляет статус шага
    */
   async updateStepStatus(stepId: number, status: DevStep['status']): Promise<void> {
@@ -332,7 +415,7 @@ export class DevPlanManager {
       throw new Error('План не загружен');
     }
 
-    const step = this.currentPlan.steps.find(s => s.id === stepId);
+    const step = this.currentPlan.steps.find((s) => s.id === stepId);
     if (!step) {
       throw new Error(`Шаг ${stepId} не найден`);
     }
