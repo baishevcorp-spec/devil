@@ -361,7 +361,8 @@ export class DevPlanManager {
       if (tree.children) {
         for (const child of tree.children) {
           if (child.type === 'file' && child.name.endsWith('.md')) {
-            files.push(path.join('.devil/references', child.name));
+            const normalizedPath = path.join('.devil/references', child.name).replace(/\\/g, '/');
+            files.push(normalizedPath);
           }
         }
       }
@@ -379,6 +380,7 @@ export class DevPlanManager {
    * UI-компоненты автоматически получают brand-dna.md и design-system.md
    */
   private assignReferencesToSteps(plan: DevPlan): void {
+    // Пути всегда с прямыми слешами для кроссплатформенности
     const brandDnaPath = '.devil/references/brand-dna.md';
     const designSystemPath = '.devil/references/design-system.md';
 

@@ -289,8 +289,11 @@ export class DevPlanExecutor {
 
     const allPaths = [...(plan?.globalReferences || []), ...(step.referenceFiles || [])];
 
+    // Нормализуем пути: заменяем обратные слеши на прямые
+    const normalizedPaths = allPaths.map((p) => p.replace(/\\/g, '/'));
+
     // Дедупликация
-    const uniquePaths = [...new Set(allPaths)];
+    const uniquePaths = [...new Set(normalizedPaths)];
 
     const loaded: ReferenceFile[] = [];
     const missing: string[] = [];
