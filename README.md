@@ -535,6 +535,7 @@ Devil — это персональный проект, но если у вас 
 ## 📞 Контакты
 
 - **Автор:** vitobro
+- **Site:** https://appaibb.ru/project/appaibb
 - **Email:** support@appaibb.ru
 - **GitHub:** https://github.com/baishevcorp-spec
 
