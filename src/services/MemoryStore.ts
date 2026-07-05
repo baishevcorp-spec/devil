@@ -53,6 +53,10 @@ export class MemoryStore implements IMemoryStore {
             throw new Error('Database integrity check failed');
           }
 
+          // Применяем миграции к существующей БД
+          this.applyMigrations();
+          this.save();
+
           logger.info('База данных загружена успешно', 'MemoryStore');
         } catch (dbError) {
           // БД повреждена — auto-recovery
@@ -75,7 +79,7 @@ export class MemoryStore implements IMemoryStore {
         // БД не существует — создаём новую
         this.db = new SQL.Database();
         this.createTables();
-          this.applyMigrations();
+        this.applyMigrations();
         this.save();
         logger.info('Создана новая база данных', 'MemoryStore');
       }
@@ -188,6 +192,20 @@ export class MemoryStore implements IMemoryStore {
       )
     `);
 
+    // Таблица для векторных представлений узлов графа (BCK-29)
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS node_embeddings (
+        id TEXT PRIMARY KEY,
+        node_id TEXT NOT NULL UNIQUE,
+        embedding BLOB NOT NULL,
+        model TEXT NOT NULL,
+        dimensions INTEGER NOT NULL,
+        text_hash TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE
+      )
+    `);
+
     this.db.run('CREATE INDEX IF NOT EXISTS idx_nodes_type ON nodes(type)');
     this.db.run('CREATE INDEX IF NOT EXISTS idx_nodes_name ON nodes(name)');
     this.db.run('CREATE INDEX IF NOT EXISTS idx_nodes_path ON nodes(path)');
@@ -247,14 +265,44 @@ export class MemoryStore implements IMemoryStore {
       this.db.run('INSERT INTO change_log_new SELECT * FROM change_log');
       this.db.run('DROP TABLE change_log');
       this.db.run('ALTER TABLE change_log_new RENAME TO change_log');
-      this.db.run('CREATE INDEX IF NOT EXISTS idx_change_log_project_path ON change_log(project_path)');
+      this.db.run(
+        'CREATE INDEX IF NOT EXISTS idx_change_log_project_path ON change_log(project_path)'
+      );
       this.db.run('CREATE INDEX IF NOT EXISTS idx_change_log_created_at ON change_log(created_at)');
 
-      this.db.run(
-        'INSERT INTO migrations (name, applied_at) VALUES (?, ?)',
-        ['002_extend_change_log_actions', Date.now()]
-      );
+      this.db.run('INSERT INTO migrations (name, applied_at) VALUES (?, ?)', [
+        '002_extend_change_log_actions',
+        Date.now(),
+      ]);
       logger.info('Применена миграция: 002_extend_change_log_actions', 'MemoryStore');
+    }
+
+    if (!applied.includes('003_create_node_embeddings')) {
+      // Создаём таблицу для хранения векторных представлений узлов графа
+      this.db.run(`
+        CREATE TABLE IF NOT EXISTS node_embeddings (
+          id TEXT PRIMARY KEY,
+          node_id TEXT NOT NULL UNIQUE,
+          embedding BLOB NOT NULL,
+          model TEXT NOT NULL,
+          dimensions INTEGER NOT NULL,
+          text_hash TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE
+        )
+      `);
+      this.db.run(
+        'CREATE INDEX IF NOT EXISTS idx_node_embeddings_node_id ON node_embeddings(node_id)'
+      );
+      this.db.run(
+        'CREATE INDEX IF NOT EXISTS idx_node_embeddings_text_hash ON node_embeddings(text_hash)'
+      );
+
+      this.db.run('INSERT INTO migrations (name, applied_at) VALUES (?, ?)', [
+        '003_create_node_embeddings',
+        Date.now(),
+      ]);
+      logger.info('Применена миграция: 003_create_node_embeddings', 'MemoryStore');
     }
   }
 
@@ -295,7 +343,9 @@ export class MemoryStore implements IMemoryStore {
 
   // ========== NODES ==========
 
-  async addNode(node: Omit<GraphNode, 'id' | 'created_at' | 'updated_at' | 'tags'> & { tags?: string[] }): Promise<string> {
+  async addNode(
+    node: Omit<GraphNode, 'id' | 'created_at' | 'updated_at' | 'tags'> & { tags?: string[] }
+  ): Promise<string> {
     if (!this.db) throw new Error('MemoryStore не инициализирован');
 
     const id = this.generateId();
@@ -868,7 +918,9 @@ export class MemoryStore implements IMemoryStore {
       preferred_libraries: this.parseJson<string[]>(getValue('preferred_libraries') as string),
       preferred_patterns: this.parseJson<string[]>(getValue('preferred_patterns') as string),
       custom_instructions: this.parseJson<string[]>(getValue('custom_instructions') as string),
-      interaction_history: this.parseJson<{ timestamp: number; action: string; details: string }[]>(getValue('interaction_history') as string),
+      interaction_history: this.parseJson<{ timestamp: number; action: string; details: string }[]>(
+        getValue('interaction_history') as string
+      ),
       updated_at: getValue('updated_at') as number,
     };
   }
