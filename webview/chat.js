@@ -412,44 +412,47 @@
   function initCommandDropdown() {
     console.log('[Devil] Command Dropdown инициализирован');
 
-var COMMANDS = [
-  // Справка
-  { name: '/help', desc: 'Список всех команд и справка' },
+    var COMMANDS = [
+      // Справка
+      { name: '/help', desc: 'Список всех команд и справка' },
 
-  // Анализ кода
-  { name: '/explain', desc: 'Объяснить код файла или выделенного фрагмента' },
-  { name: '/refactor', desc: 'Предложить рефакторинг кода (SOLID, паттерны)' },
-  { name: '/scan', desc: 'Сканировать файл и показать содержимое' },
+      // Анализ кода
+      { name: '/explain', desc: 'Объяснить код файла или выделенного фрагмента' },
+      { name: '/refactor', desc: 'Предложить рефакторинг кода (SOLID, паттерны)' },
+      { name: '/scan', desc: 'Сканировать файл и показать содержимое' },
 
-  // Поиск
-  { name: '/search', desc: 'Полнотекстовый поиск по проекту' },
-  { name: '/whereis', desc: 'Найти все использования символа в проекте' },
+      // Поиск
+      { name: '/search', desc: 'Полнотекстовый поиск по проекту' },
+      { name: '/whereis', desc: 'Найти все использования символа в проекте' },
 
-  // Генерация
-  { name: '/dev generate', desc: 'Сгенерировать план разработки' },
-  { name: '/dev next', desc: 'Выполнить следующий шаг плана' },
-  { name: '/dev status', desc: 'Показать прогресс выполнения плана' },
-  { name: '/dev skip [id]', desc: 'Пропустить шаг плана' },
-  { name: '/dev reset', desc: 'Сбросить план разработки' },
-  { name: '/roadmap generate', desc: 'Сгенерировать Roadmap проекта' },
-  { name: '/roadmap update', desc: 'Перегенерировать Roadmap с сохранением истории' },
-  { name: '/checklist generate', desc: 'Сгенерировать чек-лист на основе Roadmap' },
-  { name: '/checklist sync', desc: 'Синхронизировать чек-лист с реальной структурой проекта' },
-  { name: '/test generate', desc: 'Сгенерировать юнит-тесты для файла (или /test <путь>)' },
+      // Генерация
+      { name: '/dev generate', desc: 'Сгенерировать план разработки' },
+      { name: '/dev next', desc: 'Выполнить следующий шаг плана' },
+      { name: '/dev status', desc: 'Показать прогресс выполнения плана' },
+      { name: '/dev skip [id]', desc: 'Пропустить шаг плана' },
+      { name: '/dev reset', desc: 'Сбросить план разработки' },
+      { name: '/dev reference add', desc: 'Добавить reference-файл' },
+      { name: '/dev reference list', desc: 'Показать reference-файлы' },
+      { name: '/dev reference remove', desc: 'Удалить reference-файл' },
+      { name: '/roadmap generate', desc: 'Сгенерировать Roadmap проекта' },
+      { name: '/roadmap update', desc: 'Перегенерировать Roadmap с сохранением истории' },
+      { name: '/checklist generate', desc: 'Сгенерировать чек-лист на основе Roadmap' },
+      { name: '/checklist sync', desc: 'Синхронизировать чек-лист с реальной структурой проекта' },
+      { name: '/test generate', desc: 'Сгенерировать юнит-тесты для файла (или /test <путь>)' },
 
-  // Git
-  { name: '/diff', desc: 'Получить diff между коммитами Git' },
-  { name: '/git', desc: 'Git-операции (log, status, branch)' },
+      // Git
+      { name: '/diff', desc: 'Получить diff между коммитами Git' },
+      { name: '/git', desc: 'Git-операции (log, status, branch)' },
 
-  // Память
-  { name: '/memory show', desc: 'Показать графовую память проекта' },
-  { name: '/memory add', desc: 'Добавить узел в графовую память' },
-  { name: '/memory delete', desc: 'Удалить узел из графовой памяти' },
+      // Память
+      { name: '/memory show', desc: 'Показать графовую память проекта' },
+      { name: '/memory add', desc: 'Добавить узел в графовую память' },
+      { name: '/memory delete', desc: 'Удалить узел из графовой памяти' },
 
-  // Инструменты
-  { name: '/lint', desc: 'Запустить линтер и показать отчёт' },
-  { name: '/rebuild', desc: 'Перестроить индекс поиска и граф' },
-];
+      // Инструменты
+      { name: '/lint', desc: 'Запустить линтер и показать отчёт' },
+      { name: '/rebuild', desc: 'Перестроить индекс поиска и граф' },
+    ];
 
     var commandButton = document.getElementById('commandButton');
     var commandDropdown = document.getElementById('commandDropdown');

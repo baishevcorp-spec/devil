@@ -450,4 +450,61 @@ export class DevPlanManager {
     }
     logger.info('План сброшен', 'DevPlanManager');
   }
+
+  /**
+   * Добавляет reference-файл в глобальный список
+   */
+  async addGlobalReference(refPath: string): Promise<void> {
+    if (!this.currentPlan) {
+      throw new Error('План не загружен');
+    }
+
+    this.currentPlan.globalReferences = this.currentPlan.globalReferences || [];
+
+    // Нормализуем путь
+    const normalizedPath = refPath.replace(/\\/g, '/');
+
+    // Проверяем дубликаты
+    if (this.currentPlan.globalReferences.includes(normalizedPath)) {
+      throw new Error(`Файл уже в списке: ${normalizedPath}`);
+    }
+
+    this.currentPlan.globalReferences.push(normalizedPath);
+    this.currentPlan.updatedAt = Date.now();
+    await this.savePlan();
+
+    logger.info(`Добавлен global reference: ${normalizedPath}`, 'DevPlanManager');
+  }
+
+  /**
+   * Удаляет reference-файл из глобального списка
+   */
+  async removeGlobalReference(refPath: string): Promise<void> {
+    if (!this.currentPlan) {
+      throw new Error('План не загружен');
+    }
+
+    this.currentPlan.globalReferences = this.currentPlan.globalReferences || [];
+
+    // Нормализуем путь
+    const normalizedPath = refPath.replace(/\\/g, '/');
+
+    const index = this.currentPlan.globalReferences.indexOf(normalizedPath);
+    if (index === -1) {
+      throw new Error(`Файл не найден в списке: ${normalizedPath}`);
+    }
+
+    this.currentPlan.globalReferences.splice(index, 1);
+    this.currentPlan.updatedAt = Date.now();
+    await this.savePlan();
+
+    logger.info(`Удалён global reference: ${normalizedPath}`, 'DevPlanManager');
+  }
+
+  /**
+   * Возвращает список глобальных reference-файлов
+   */
+  getGlobalReferences(): string[] {
+    return this.currentPlan?.globalReferences || [];
+  }
 }

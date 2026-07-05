@@ -160,7 +160,10 @@ export class CommandHandler {
               '- `/dev next` — выполнить следующий шаг\n' +
               '- `/dev status` — показать прогресс\n' +
               '- `/dev skip [id]` — пропустить шаг\n' +
-              '- `/dev reset` — сбросить план',
+              '- `/dev reset` — сбросить план\n' +
+              '- `/dev reference add <path>` — добавить reference-файл\n' +
+              '- `/dev reference list` — показать reference-файлы\n' +
+              '- `/dev reference remove <path>` — удалить reference-файл',
           };
         }
 
@@ -175,6 +178,30 @@ export class CommandHandler {
             return await this.handleDevSkip(args);
           case 'reset':
             return await this.handleDevReset();
+          case 'reference':
+            if (args.length < 2) {
+              return {
+                success: false,
+                message:
+                  'Использование:\n' +
+                  '- `/dev reference add <path>` — добавить reference-файл\n' +
+                  '- `/dev reference list` — показать reference-файлы\n' +
+                  '- `/dev reference remove <path>` — удалить reference-файл',
+              };
+            }
+            switch (args[1]) {
+              case 'add':
+                return await this.handleDevReferenceAdd(args.slice(2));
+              case 'list':
+                return await this.handleDevReferenceList();
+              case 'remove':
+                return await this.handleDevReferenceRemove(args.slice(2));
+              default:
+                return {
+                  success: false,
+                  message: `Неизвестная подкоманда: /dev reference ${args[1]}`,
+                };
+            }
           default:
             return {
               success: false,
@@ -1522,6 +1549,206 @@ export class CommandHandler {
     }
   }
 
+  private async handleDevReferenceAdd(args: string[]): Promise<CommandResult> {
+    if (!this.devPlanManager) {
+      return { success: false, message: '❌ DevPlanManager не инициализирован.' };
+    }
+
+    const project = this.projectManager.getCurrentProject();
+    if (!project) {
+      return { success: false, message: 'Проект не открыт.' };
+    }
+
+    if (args.length === 0) {
+      return {
+        success: false,
+        message:
+          'Использование: /dev reference add <путь>\n\nПример: /dev reference add .devil/references/architecture.md',
+      };
+    }
+
+    const refPath = args.join(' ');
+
+    try {
+      await this.devPlanManager.initialize(project.path);
+      const plan = this.devPlanManager.getCurrentPlan();
+
+      if (!plan) {
+        return {
+          success: false,
+          message: '📋 План разработки не найден. Выполните `/dev generate`.',
+        };
+      }
+
+      // Нормализуем путь
+      const normalizedPath = refPath.replace(/\\/g, '/');
+
+      // Проверяем существование файла
+      const fullPath = path.join(project.path, normalizedPath);
+      const exists = await this.fileSystemService.fileExists(fullPath);
+      if (!exists) {
+        return {
+          success: false,
+          message: ` Файл не найден: \`${normalizedPath}\``,
+        };
+      }
+
+      // Инициализируем globalReferences если нет
+      // Добавляем через публичный метод DevPlanManager
+      try {
+        await this.devPlanManager.addGlobalReference(normalizedPath);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          success: false,
+          message: `⚠️ ${errorMessage}`,
+        };
+      }
+
+      // Перечитываем план для получения актуального списка
+      const updatedPlan = this.devPlanManager.getCurrentPlan();
+
+      return {
+        success: true,
+        message:
+          `✅ Добавлен reference-файл: \`${normalizedPath}\`\n\n` +
+          `📊 **Глобальные reference-файлы:** ${updatedPlan?.globalReferences?.length || 0}\n\n` +
+          'Теперь этот файл будет учитываться при генерации кода для всех шагов.',
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { success: false, message: 'Ошибка добавления reference-файла: ' + errorMessage };
+    }
+  }
+
+  private async handleDevReferenceList(): Promise<CommandResult> {
+    if (!this.devPlanManager) {
+      return { success: false, message: ' DevPlanManager не инициализирован.' };
+    }
+
+    const project = this.projectManager.getCurrentProject();
+    if (!project) {
+      return { success: false, message: 'Проект не открыт.' };
+    }
+
+    try {
+      await this.devPlanManager.initialize(project.path);
+      const plan = this.devPlanManager.getCurrentPlan();
+
+      if (!plan) {
+        return {
+          success: false,
+          message: '📋 План разработки не найден. Выполните `/dev generate`.',
+        };
+      }
+
+      const lines: string[] = [];
+      lines.push('## 📚 Reference-файлы плана\n');
+
+      // Глобальные reference-файлы
+      if (plan.globalReferences && plan.globalReferences.length > 0) {
+        lines.push('### Глобальные (применяются ко всем шагам)\n');
+        for (const ref of plan.globalReferences) {
+          lines.push(`- \`${ref}\``);
+        }
+        lines.push('');
+      } else {
+        lines.push('### Глобальные: нет\n');
+        lines.push('');
+      }
+
+      // Per-step reference-файлы
+      const stepsWithRefs = plan.steps.filter(
+        (s) => s.referenceFiles && s.referenceFiles.length > 0
+      );
+
+      if (stepsWithRefs.length > 0) {
+        lines.push('### Per-step (для конкретных шагов)\n');
+        for (const step of stepsWithRefs) {
+          lines.push(`**Шаг ${step.id}:** \`${step.path}\``);
+          for (const ref of step.referenceFiles!) {
+            lines.push(`  - \`${ref}\``);
+          }
+          lines.push('');
+        }
+      } else {
+        lines.push('### Per-step: нет\n');
+      }
+
+      return {
+        success: true,
+        message: lines.join('\n'),
+        data: { plan },
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: 'Ошибка получения списка reference-файлов: ' + errorMessage,
+      };
+    }
+  }
+
+  private async handleDevReferenceRemove(args: string[]): Promise<CommandResult> {
+    if (!this.devPlanManager) {
+      return { success: false, message: '❌ DevPlanManager не инициализирован.' };
+    }
+
+    const project = this.projectManager.getCurrentProject();
+    if (!project) {
+      return { success: false, message: 'Проект не открыт.' };
+    }
+
+    if (args.length === 0) {
+      return {
+        success: false,
+        message:
+          'Использование: /dev reference remove <путь>\n\nПример: /dev reference remove .devil/references/architecture.md',
+      };
+    }
+
+    const refPath = args.join(' ');
+
+    try {
+      await this.devPlanManager.initialize(project.path);
+      const plan = this.devPlanManager.getCurrentPlan();
+
+      if (!plan) {
+        return {
+          success: false,
+          message: '📋 План разработки не найден. Выполните `/dev generate`.',
+        };
+      }
+
+      // Нормализуем путь
+      const normalizedPath = refPath.replace(/\\/g, '/');
+
+      // Удаляем через публичный метод DevPlanManager
+      try {
+        await this.devPlanManager.removeGlobalReference(normalizedPath);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          success: false,
+          message: `❌ ${errorMessage}\n\nИспользуйте \`/dev reference list\` для просмотра всех reference-файлов.`,
+        };
+      }
+
+      // Перечитываем план для получения актуального списка
+      const updatedPlan = this.devPlanManager.getCurrentPlan();
+
+      return {
+        success: true,
+        message:
+          `✅ Удалён reference-файл: \`${normalizedPath}\`\n\n` +
+          `📊 **Осталось глобальных reference-файлов:** ${updatedPlan?.globalReferences?.length || 0}`,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { success: false, message: 'Ошибка удаления reference-файла: ' + errorMessage };
+    }
+  }
+
   /**
    * Форматирует план для отображения в чате.
    */
@@ -2025,7 +2252,8 @@ export class CommandHandler {
     if (args.length === 0) {
       return {
         success: false,
-        message: 'Использование: /memory add <текст записи>\n\nПример: /memory add React используется для UI',
+        message:
+          'Использование: /memory add <текст записи>\n\nПример: /memory add React используется для UI',
       };
     }
 
@@ -2038,7 +2266,10 @@ export class CommandHandler {
       // Простая эвристика для определения типа
       if (text.toLowerCase().includes('технология') || text.toLowerCase().includes('библиотека')) {
         nodeType = 'technology' as NodeType;
-      } else if (text.toLowerCase().includes('решение') || text.toLowerCase().includes('архитектур')) {
+      } else if (
+        text.toLowerCase().includes('решение') ||
+        text.toLowerCase().includes('архитектур')
+      ) {
         nodeType = 'decision' as NodeType;
       }
 
@@ -2047,7 +2278,7 @@ export class CommandHandler {
         name: text.substring(0, 50), // Ограничиваем длину имени
         path: '',
         metadata: { content: text, source: 'manual' },
-        tags: ['user-added']
+        tags: ['user-added'],
       });
 
       return {
@@ -2336,6 +2567,9 @@ export class CommandHandler {
       '- `/dev status` — показать прогресс выполнения плана',
       '- `/dev skip [id]` — пропустить шаг плана',
       '- `/dev reset` — сбросить план разработки',
+      '- `/dev reference add <path>` — добавить reference-файл в глобальный список',
+      '- `/dev reference list` — показать все reference-файлы плана',
+      '- `/dev reference remove <path>` — удалить reference-файл из глобального списка',
       '- `/checklist generate` — сгенерировать чек-лист на основе roadmap.md',
       '- `/checklist sync` — синхронизировать чек-лист с реальной структурой проекта',
       '- `/test generate <путь>` или `/test <путь>` — сгенерировать юнит-тесты для файла',

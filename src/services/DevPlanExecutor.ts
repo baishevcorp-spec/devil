@@ -374,13 +374,13 @@ export class DevPlanExecutor {
     }
 
     // 2. Задача
-    prompt += `# Задача\n\n`;
+    prompt += '# Задача\n\n';
     prompt += `Создай ПРОДАКШЕН-ГОТОВЫЙ код для файла \`${step.path}\`.\n\n`;
     prompt += `**Описание:** ${step.description}\n\n`;
 
     // 3. Context hints (дополнительные указания)
     if (step.contextHints && Object.keys(step.contextHints).length > 0) {
-      prompt += `# Дополнительные указания\n\n`;
+      prompt += '# Дополнительные указания\n\n';
       for (const [key, value] of Object.entries(step.contextHints)) {
         prompt += `- **${key}:** ${value}\n`;
       }
