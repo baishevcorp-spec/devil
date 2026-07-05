@@ -137,6 +137,13 @@ export class CommandHandler {
       case '/git':
         return await this.handleGit(args);
       case '/memory':
+        if (args.length > 0 && args[0] === 'embeddings') {
+          if (args[1] === 'build') {
+            return await this.handleMemoryEmbeddingsBuild();
+          } else if (args[1] === 'rebuild') {
+            return await this.handleMemoryEmbeddingsRebuild();
+          }
+        }
         return await this.handleMemory(args);
       case '/rebuild':
         return await this.handleRebuild([]);
@@ -208,6 +215,8 @@ export class CommandHandler {
               message: `Неизвестная подкоманда: /dev ${args[0]}`,
             };
         }
+      case '/semsearch':
+        return await this.handleSemSearch(args);
       case '/help':
         return this.handleHelp();
       default:
@@ -2559,6 +2568,11 @@ export class CommandHandler {
       '- `/search <запрос>` — поиск по содержимому файлов',
       '- `/whereis <символ>` — найти символ в проекте',
       '',
+      '**Семантический поиск:**',
+      '- `/semsearch <запрос>` — семантический поиск по памяти',
+      '- `/memory embeddings build` — векторизовать все узлы графа',
+      '- `/memory embeddings rebuild` — перестроить все embeddings',
+      '',
       '**Анализ кода:**',
       '- `/refactor <путь>` — предложить рефакторинг кода (SOLID, паттерны)',
       '**Генерация:**',
@@ -2861,6 +2875,114 @@ export class CommandHandler {
         success: false,
         message: 'Ошибка запуска ESLint: ' + errorMessage,
       };
+    }
+  }
+
+  private async handleSemSearch(args: string[]): Promise<CommandResult> {
+    if (args.length === 0) {
+      return {
+        success: false,
+        message:
+          'Использование: /semsearch <запрос>\n\nПример: /semsearch как реализовать аутентификацию?',
+      };
+    }
+
+    const query = args.join(' ');
+
+    try {
+      // Проверяем, что searchIndex инициализирован с semantic dependencies
+      if (!this.searchIndex) {
+        return {
+          success: false,
+          message: '❌ SearchIndex не инициализирован',
+        };
+      }
+
+      // Выполняем семантический поиск
+      const results = await this.searchIndex.searchMemory(query, 10);
+
+      if (results.length === 0) {
+        return {
+          success: true,
+          message:
+            '🔍 Ничего не найдено. Возможно, память ещё не векторизована.\n\nВыполните `/memory embeddings build` для создания embeddings.',
+        };
+      }
+
+      // Формируем ответ
+      const lines: string[] = [];
+      lines.push(`🔍 **Найдено ${results.length} релевантных записей:**\n`);
+
+      results.forEach((result, index) => {
+        const score = (result.similarity * 100).toFixed(1);
+        const node = result.node;
+
+        lines.push(`${index + 1}. **${node.name}** (score: ${score}%)`);
+
+        if (node.type === 'file' && node.path) {
+          lines.push(`   📄 \`${node.path}\``);
+        } else {
+          lines.push(`   🏷️ Тип: ${node.type}`);
+        }
+
+        if (node.metadata?.why) {
+          lines.push(`   💡 Why: ${node.metadata.why}`);
+        }
+
+        if (node.metadata?.how_to_apply) {
+          lines.push(`   🔧 How to apply: ${node.metadata.how_to_apply}`);
+        }
+
+        lines.push('');
+      });
+
+      return {
+        success: true,
+        message: lines.join('\n'),
+        data: { results, count: results.length },
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: `Ошибка семантического поиска: ${errorMessage}`,
+      };
+    }
+  }
+
+  private async handleMemoryEmbeddingsBuild(): Promise<CommandResult> {
+    try {
+      if (!this.searchIndex) {
+        return { success: false, message: '❌ SearchIndex не инициализирован' };
+      }
+
+      const count = await this.searchIndex.buildNodeEmbeddings();
+
+      return {
+        success: true,
+        message: `✅ Векторизовано ${count} узлов графа.\n\nТеперь вы можете использовать /semsearch для семантического поиска.`,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { success: false, message: `Ошибка векторизации: ${errorMessage}` };
+    }
+  }
+
+  private async handleMemoryEmbeddingsRebuild(): Promise<CommandResult> {
+    try {
+      if (!this.searchIndex) {
+        return { success: false, message: '❌ SearchIndex не инициализирован' };
+      }
+
+      const count = await this.searchIndex.rebuildNodeEmbeddings();
+
+      return {
+        success: true,
+        message: `✅ Перестроено ${count} embeddings.\n\nВсе embeddings обновлены.`,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { success: false, message: `Ошибка перестройки: ${errorMessage}` };
     }
   }
 

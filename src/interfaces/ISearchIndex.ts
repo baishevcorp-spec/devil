@@ -1,3 +1,5 @@
+import { MemorySearchResult } from '../services/SearchIndex';
+
 /**
  * Результат поиска.
  */
@@ -72,4 +74,11 @@ export interface ISearchIndex {
    * Проверяет, инициализирован ли индекс.
    */
   isInitialized(): boolean;
+
+  // Semantic search methods (BCK-29)
+  setSemanticDependencies(embeddingService: any, memoryStore: any): void;
+  buildNodeEmbeddings(): Promise<number>;
+  updateNodeEmbedding(nodeId: string): Promise<void>;
+  searchMemory(query: string, topK?: number): Promise<MemorySearchResult[]>;
+  rebuildNodeEmbeddings(): Promise<number>;
 }

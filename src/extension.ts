@@ -16,6 +16,7 @@ import { ChatPanel } from './panels/ChatPanel';
 import { logger } from './utils/logger';
 import { DevPlanManager } from './services/DevPlanManager';
 import { DevPlanExecutor } from './services/DevPlanExecutor';
+import { EmbeddingService } from './services/EmbeddingService';
 
 let configManager: ConfigManager;
 let fileSystemService: FileSystemService;
@@ -31,6 +32,7 @@ let userProfileManager: UserProfileManager;
 let multiModelManager: MultiModelManager;
 let devPlanManager: DevPlanManager;
 let devPlanExecutor: DevPlanExecutor;
+let embeddingService: EmbeddingService;
 
 export function activate(context: vscode.ExtensionContext): void {
   logger.info('Devil extension is activating...', 'Extension');
@@ -114,6 +116,15 @@ export function activate(context: vscode.ExtensionContext): void {
           await memoryStore.initialize(folder.uri.fsPath);
           await historyManager.initialize(folder.uri.fsPath);
           await searchIndex.initialize(folder.uri.fsPath);
+
+          // BCK-29: Инициализация семантического поиска
+          embeddingService = new EmbeddingService();
+          searchIndex.setSemanticDependencies(embeddingService, memoryStore);
+
+          // Загружаем модель для векторизации в фоне (не блокируем открытие проекта)
+          embeddingService.initialize().catch((err) => {
+            logger.error('Ошибка инициализации EmbeddingService', err, 'Extension');
+          });
 
           // BCK-26: Запускаем GraphBuilder для построения графовой памяти
           // DEVOPS-09: Используем buildIndexFromTree для избежания двойного сканирования ФС

@@ -1,7 +1,7 @@
 import { LLMProvider } from '../../src/services/LLMProvider';
 import { ConfigManager } from '../../src/services/ConfigManager';
 import { LLMError, NetworkError } from '../../src/utils/errors';
-import * as vscodeMock from '../__mocks__/vscode';
+import * as vscode from 'vscode';
 
 // Мок модуля 'vscode' через moduleNameMapper в jest.config.js
 
@@ -45,11 +45,16 @@ describe('LLMProvider', () => {
     (axios.create as jest.Mock).mockReturnValue(mockAxiosInstance);
 
     // Настраиваем конфигурацию
-    vscodeMock.__clearConfig();
-    vscodeMock.__setConfigValue('devil.baseUrl', 'https://api.openai.com/v1');
-    vscodeMock.__setConfigValue('devil.apiKey', 'sk-test-key');
-    vscodeMock.__setConfigValue('devil.model', 'gpt-4o-mini');
-    vscodeMock.__setConfigValue('devil.maxRetries', 3);
+    // @ts-ignore
+    vscode.__clearConfig();
+    // @ts-ignore
+    vscode.__setConfigValue('devil.baseUrl', 'https://api.openai.com/v1');
+    // @ts-ignore
+    vscode.__setConfigValue('devil.apiKey', 'sk-test-key');
+    // @ts-ignore
+    vscode.__setConfigValue('devil.model', 'gpt-4o-mini');
+    // @ts-ignore
+    vscode.__setConfigValue('devil.maxRetries', 3);
 
     configManager = new ConfigManager();
     configManager.initialize();

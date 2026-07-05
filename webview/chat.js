@@ -424,6 +424,9 @@
       // Поиск
       { name: '/search', desc: 'Полнотекстовый поиск по проекту' },
       { name: '/whereis', desc: 'Найти все использования символа в проекте' },
+      { name: '/semsearch', desc: 'Семантический поиск по памяти' },
+      { name: '/memory embeddings build', desc: 'Векторизовать узлы графа' },
+      { name: '/memory embeddings rebuild', desc: 'Перестроить embeddings' },
 
       // Генерация
       { name: '/dev generate', desc: 'Сгенерировать план разработки' },

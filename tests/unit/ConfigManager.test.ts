@@ -1,6 +1,7 @@
 import { ConfigManager } from '../../src/services/ConfigManager';
 import { ConfigError } from '../../src/utils/errors';
-import * as vscodeMock from '../__mocks__/vscode';
+import * as vscode from 'vscode';
+
 
 // Мок модуля 'vscode' теперь настраивается через moduleNameMapper в jest.config.js
 // Ручной jest.mock('vscode', ...) больше не нужен — это устраняет бесконечную рекурсию
@@ -9,7 +10,8 @@ describe('ConfigManager', () => {
   let configManager: ConfigManager;
 
   beforeEach(() => {
-    vscodeMock.__clearConfig();
+    // @ts-ignore
+    vscode.__clearConfig();
     configManager = new ConfigManager();
     configManager.initialize();
   });
@@ -28,9 +30,12 @@ describe('ConfigManager', () => {
     });
 
     it('возвращает значения из settings.json', () => {
-      vscodeMock.__setConfigValue('devil.baseUrl', 'https://api.myproxyapi.ru/v1');
-      vscodeMock.__setConfigValue('devil.apiKey', 'sk-test-123');
-      vscodeMock.__setConfigValue('devil.model', 'gpt-4o');
+      // @ts-ignore
+      vscode.__setConfigValue('devil.baseUrl', 'https://api.myproxyapi.ru/v1');
+      // @ts-ignore
+      vscode.__setConfigValue('devil.apiKey', 'sk-test-123');
+      // @ts-ignore
+      vscode.__setConfigValue('devil.model', 'gpt-4o');
 
       const config = configManager.getConfig();
       expect(config.baseUrl).toBe('https://api.myproxyapi.ru/v1');
@@ -41,31 +46,41 @@ describe('ConfigManager', () => {
 
   describe('validate', () => {
     it('бросает ConfigError, если apiKey пуст', () => {
-      vscodeMock.__setConfigValue('devil.baseUrl', 'https://api.example.com/v1');
-      vscodeMock.__setConfigValue('devil.apiKey', '');
+      // @ts-ignore
+      vscode.__setConfigValue('devil.baseUrl', 'https://api.example.com/v1');
+      // @ts-ignore
+      vscode.__setConfigValue('devil.apiKey', '');
 
       expect(() => configManager.validate()).toThrow(ConfigError);
     });
 
     it('бросает ConfigError, если baseUrl пуст', () => {
-      vscodeMock.__setConfigValue('devil.baseUrl', '');
-      vscodeMock.__setConfigValue('devil.apiKey', 'sk-test');
+      // @ts-ignore
+      vscode.__setConfigValue('devil.baseUrl', '');
+      // @ts-ignore
+      vscode.__setConfigValue('devil.apiKey', 'sk-test');
 
       expect(() => configManager.validate()).toThrow(ConfigError);
     });
 
     it('бросает ConfigError, если maxRetries вне диапазона', () => {
-      vscodeMock.__setConfigValue('devil.baseUrl', 'https://api.example.com/v1');
-      vscodeMock.__setConfigValue('devil.apiKey', 'sk-test');
-      vscodeMock.__setConfigValue('devil.maxRetries', 99);
+      // @ts-ignore
+      vscode.__setConfigValue('devil.baseUrl', 'https://api.example.com/v1');
+      // @ts-ignore
+      vscode.__setConfigValue('devil.apiKey', 'sk-test');
+      // @ts-ignore
+      vscode.__setConfigValue('devil.maxRetries', 99);
 
       expect(() => configManager.validate()).toThrow(ConfigError);
     });
 
     it('проходит валидацию при корректном конфиге', () => {
-      vscodeMock.__setConfigValue('devil.baseUrl', 'https://api.example.com/v1');
-      vscodeMock.__setConfigValue('devil.apiKey', 'sk-test');
-      vscodeMock.__setConfigValue('devil.model', 'gpt-4o-mini');
+      // @ts-ignore
+      vscode.__setConfigValue('devil.baseUrl', 'https://api.example.com/v1');
+      // @ts-ignore
+      vscode.__setConfigValue('devil.apiKey', 'sk-test');
+      // @ts-ignore
+      vscode.__setConfigValue('devil.model', 'gpt-4o-mini');
 
       expect(() => configManager.validate()).not.toThrow();
       expect(configManager.isValid()).toBe(true);
@@ -74,10 +89,14 @@ describe('ConfigManager', () => {
 
   describe('getters', () => {
     beforeEach(() => {
-      vscodeMock.__setConfigValue('devil.baseUrl', 'https://api.example.com/v1');
-      vscodeMock.__setConfigValue('devil.apiKey', 'sk-test');
-      vscodeMock.__setConfigValue('devil.model', 'claude-3');
-      vscodeMock.__setConfigValue('devil.maxRetries', 5);
+      // @ts-ignore
+      vscode.__setConfigValue('devil.baseUrl', 'https://api.example.com/v1');
+      // @ts-ignore
+      vscode.__setConfigValue('devil.apiKey', 'sk-test');
+      // @ts-ignore
+      vscode.__setConfigValue('devil.model', 'claude-3');
+      // @ts-ignore
+      vscode.__setConfigValue('devil.maxRetries', 5);
     });
 
     it('getBaseUrl возвращает baseUrl', () => {

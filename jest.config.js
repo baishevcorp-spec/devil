@@ -5,9 +5,9 @@ module.exports = {
   testMatch: ['**/*.test.ts'],
   moduleFileExtensions: ['ts', 'js', 'json'],
 
-  // Объединённый moduleNameMapper (исправлено дублирование)
+  // Объединённый moduleNameMapper (оба мока в tests/__mocks__/)
   moduleNameMapper: {
-    '^vscode$': '<rootDir>/__mocks__/vscode.js',
+    '^vscode$': '<rootDir>/tests/__mocks__/vscode.js',
     '^@xenova/transformers$': '<rootDir>/tests/__mocks__/@xenova/transformers.js',
   },
 
@@ -15,7 +15,5 @@ module.exports = {
   coverageDirectory: 'coverage',
   verbose: true,
   testTimeout: 10000,
-
-  // Игнорируем предупреждения о нестабильных API
   silent: false,
 };
