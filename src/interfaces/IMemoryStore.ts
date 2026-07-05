@@ -24,7 +24,7 @@ export interface GraphNode {
   id: string;
   type: NodeType;
   name: string;
-  path: string;
+  path?: string;
   metadata?: Record<string, unknown>;
   tags?: Tag[];
   created_at: number;
