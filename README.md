@@ -72,6 +72,15 @@
 | `/forget <id>` | Удалить конкретную запись из всех хранилищ |
 | `/dream` | Ручной запуск фоновой оптимизации памяти |
 
+#### 🧠 Семантический поиск
+
+| Команда | Описание |
+|---------|----------|
+| `/semsearch <запрос>` | Семантический поиск по памяти с использованием векторных embeddings |
+| `/memory embeddings build` | Векторизовать все узлы графа для семантического поиска |
+| `/memory embeddings rebuild` | Полностью перестроить все embeddings |
+
+
 #### 🔧 Git и модели
 
 | Команда | Описание |
@@ -251,6 +260,52 @@ F5 (в VS Code)
 /forget <id>                            # Удалить запись из всех хранилищ
 ```
 
+## 🧠 Семантический поиск (BCK-29)
+
+Devil использует векторные embeddings для семантического поиска по памяти проекта. Это позволяет находить релевантные узлы графа по смыслу, а не только по точному совпадению текста.
+
+### Как это работает
+
+1. **Векторизация**: Каждый узел графа (файлы, классы, функции, решения) преобразуется в вектор размерностью 384 с помощью модели `all-MiniLM-L6-v2`
+2. **Хранение**: Векторы сохраняются в таблице `node_embeddings` SQLite
+3. **Поиск**: При запросе `/semsearch` генерируется embedding запроса и вычисляется косинусное сходство со всеми узлами
+
+### Использование
+
+```bash
+# 1. Векторизовать память (выполняется один раз)
+/memory embeddings build
+
+# 2. Выполнить семантический поиск
+/semsearch как реализовать аутентификацию?
+
+# 3. Перестроить embeddings (если память изменилась)
+/memory embeddings rebuild
+```
+
+### Пример
+
+```
+👤 /semsearch как реализовать аутентификацию?
+🤖 🔍 Найдено 10 релевантных записей:
+
+1. **Решение: Использовать JWT** (score: 87.5%)
+   💡 Why: Stateless аутентификация упрощает масштабирование
+   🔧 How to apply: Использовать jsonwebtoken пакет
+
+2. **Файл: src/services/AuthService.ts** (score: 72.3%)
+   📄 src/services/AuthService.ts
+```
+
+### Технологии
+
+```
+Модель: Xenova/all-MiniLM-L6-v2 (384 dimensions, ~80MB)
+Библиотека: @xenova/transformers (локальная генерация embeddings)
+Хранилище: SQLite таблица node_embeddings
+Метрика: Косинусное сходство (cosine similarity)
+```
+
 ---
 
 ## 🎨 Reference Files
@@ -424,6 +479,7 @@ Devil построен по принципу разделения ответст
 
 ### Текущий статус: v1.0.0 (Релиз)
 
+```
 | Версия | Дата | Статус | Ключевые результаты |
 |--------|------|--------|---------------------|
 | v0.1-alpha | 2026-07-04 | ✅ Завершён | Архитектура, окружение, скелет расширения |
@@ -433,7 +489,9 @@ Devil построен по принципу разделения ответст
 | v0.5-rc2 | 2026-08-29 | ✅ Завершён | Индексация, семантический поиск, линтинг |
 | v0.5-rc3 | 2026-09-01 | ✅ Завершён | Мульти-модельность, харденинг, `/dev generate` |
 | **v1.0.0** | **2026-09-12** | **✅ Завершён** | **Reference Files, Managed Auto-Memory, финальный релиз** |
+| **v1.0.0** | **2026-07-05** | **✅ Завершён** | **Reference Files, Managed Auto-Memory, финальный релиз** |\n| **v1.1.0** | **2026-07-05** | **✅ Завершён** | **Семантический поиск (BCK-29), EmbeddingService, /semsearch** |\n| v1.2.0 | 2026-07-12 | ⏳ Запланирован | DreamManager, Extract, Recall, /forget, /dream';
 | v1.1.0 | 2026-10-01 | ⏳ Запланирован | Векторный поиск, UI-улучшения, гибридные кнопки |
+```
 
 **Полный Roadmap:** [docs/Roadmap.md](docs/Roadmap.md)
 
@@ -516,31 +574,3 @@ echo "✅ README.md обновлён"
 | **Благодарности** | Qwen Studio |
 | **Дата** | 2026-07-05 |
 Вся документация встроена в README |
-
-## 🎯 Ключевые особенности нового README
-
-1. **Полный self-contained документ** — не требует GUIDE.md
-2. **Reference Files** — отдельный раздел с примером использования
-3. **Managed Auto-Memory** — описание 4 операций (Extract/Dream/Recall/Forget)
-4. **Ollama** — пример настройки локальной модели
-5. **Актуальный статус** — v1.0.0 как релиз
-6. **Все команды** — полный список сгруппирован по категориям
-
-После создания файла выполните коммит:
-
-```bash
-git add README.md
-git commit -m "docs: update README.md for v1.0.0 release
-
-- Add Reference Files section with usage examples
-- Add Managed Auto-Memory section (Extract/Dream/Recall/Forget)
-- Update version to v1.0.0
-- Add Ollama configuration example
-- Expand commands list with all /dev reference, /dream, /forget commands
-- Update architecture diagram with new modules
-- Update contacts and acknowledgments
-- Update date to 2026-07-05
-- Remove GUIDE.md reference (all docs in README)
-
-Refs: DEVOPS-07, v1.0.0 release"
-```
