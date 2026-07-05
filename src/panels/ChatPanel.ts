@@ -13,6 +13,8 @@ import { HistoryManager } from '../services/HistoryManager';
 import { ConfigManager } from '../services/ConfigManager';
 import { DevPlanManager } from '../services/DevPlanManager';
 import { DevPlanExecutor } from '../services/DevPlanExecutor';
+import { DreamManager } from '../services/DreamManager';
+import { DreamLockManager } from '../services/DreamLockManager';
 import { CommandHandler } from '../commands/CommandHandler';
 import { getUserFriendlyMessage } from '../utils/errors';
 
@@ -64,7 +66,9 @@ export class ChatPanel {
     multiModelManager?: IMultiModelManager,
     configManager?: ConfigManager,
     devPlanManager?: DevPlanManager,
-    devPlanExecutor?: DevPlanExecutor
+    devPlanExecutor?: DevPlanExecutor,
+    dreamManager?: DreamManager,
+    dreamLockManager?: DreamLockManager
   ): ChatPanel {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
@@ -104,7 +108,9 @@ export class ChatPanel {
       multiModelManager,
       configManager || new ConfigManager(),
       devPlanManager,
-      devPlanExecutor
+      devPlanExecutor,
+      dreamManager,
+      dreamLockManager
     );
     return ChatPanel.currentPanel;
   }
@@ -124,7 +130,9 @@ export class ChatPanel {
     multiModelManager?: IMultiModelManager,
     configManager?: ConfigManager,
     devPlanManager?: DevPlanManager,
-    devPlanExecutor?: DevPlanExecutor
+    devPlanExecutor?: DevPlanExecutor,
+    dreamManager?: DreamManager,
+    dreamLockManager?: DreamLockManager
   ) {
     this._panel = panel;
     this._extensionUri = extensionUri;
@@ -149,7 +157,9 @@ export class ChatPanel {
       graphBuilder,
       multiModelManager,
       devPlanManager,
-      devPlanExecutor
+      devPlanExecutor,
+      dreamManager,
+      dreamLockManager
     );
 
     this._initializeHistory();

@@ -16,6 +16,8 @@ import { ChatPanel } from './panels/ChatPanel';
 import { logger } from './utils/logger';
 import { DevPlanManager } from './services/DevPlanManager';
 import { DevPlanExecutor } from './services/DevPlanExecutor';
+import { DreamManager } from './services/DreamManager';
+import { DreamLockManager } from './services/DreamLockManager';
 import { EmbeddingService } from './services/EmbeddingService';
 
 let configManager: ConfigManager;
@@ -32,6 +34,8 @@ let userProfileManager: UserProfileManager;
 let multiModelManager: MultiModelManager;
 let devPlanManager: DevPlanManager;
 let devPlanExecutor: DevPlanExecutor;
+let dreamManager: DreamManager;
+let dreamLockManager: DreamLockManager;
 let embeddingService: EmbeddingService;
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -92,7 +96,9 @@ export function activate(context: vscode.ExtensionContext): void {
         multiModelManager,
         configManager,
         devPlanManager,
-        devPlanExecutor
+        devPlanExecutor,
+        dreamManager,
+        dreamLockManager
       );
     });
 
@@ -120,6 +126,15 @@ export function activate(context: vscode.ExtensionContext): void {
           // BCK-29: Инициализация семантического поиска
           embeddingService = new EmbeddingService();
           searchIndex.setSemanticDependencies(embeddingService, memoryStore);
+
+          // BCK-32: Инициализация DreamManager
+          dreamLockManager = new DreamLockManager(path.join(folder.uri.fsPath, '.devil'));
+          dreamManager = new DreamManager(
+            memoryStore,
+            userProfileManager,
+            fileSystemService,
+            folder.uri.fsPath
+          );
 
           // Загружаем модель для векторизации в фоне (не блокируем открытие проекта)
           embeddingService.initialize().catch((err) => {
@@ -235,7 +250,9 @@ export function activate(context: vscode.ExtensionContext): void {
           multiModelManager,
           configManager,
           devPlanManager,
-          devPlanExecutor
+          devPlanExecutor,
+          dreamManager,
+          dreamLockManager
         );
 
         const filePath = editor.document.fileName;

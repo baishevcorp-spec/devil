@@ -17,6 +17,8 @@ import { RoadmapParser } from '../utils/RoadmapParser';
 import { ChecklistSync } from '../utils/ChecklistSync';
 import { DevPlanManager } from '../services/DevPlanManager';
 import { DevPlanExecutor } from '../services/DevPlanExecutor';
+import { DreamManager } from '../services/DreamManager';
+import { DreamLockManager } from '../services/DreamLockManager';
 
 export interface CommandResult {
   success: boolean;
@@ -51,7 +53,9 @@ export class CommandHandler {
     private readonly graphBuilder?: GraphBuilder,
     private readonly multiModelManager?: IMultiModelManager,
     private readonly devPlanManager?: DevPlanManager,
-    private readonly devPlanExecutor?: DevPlanExecutor
+    private readonly devPlanExecutor?: DevPlanExecutor,
+    private readonly dreamManager?: DreamManager,
+    private readonly dreamLockManager?: DreamLockManager
   ) {
     logger.info('CommandHandler инициализирован', 'CommandHandler');
   }
@@ -145,6 +149,8 @@ export class CommandHandler {
           }
         }
         return await this.handleMemory(args);
+      case '/dream':
+        return await this.handleDream();
       case '/rebuild':
         return await this.handleRebuild([]);
       case '/model':
@@ -2983,6 +2989,91 @@ export class CommandHandler {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       return { success: false, message: `Ошибка перестройки: ${errorMessage}` };
+    }
+  }
+
+  /**
+   * Команда /dream — запуск фоновой оптимизации памяти
+   */
+  private async handleDream(): Promise<CommandResult> {
+    if (!this.dreamManager || !this.dreamLockManager) {
+      return {
+        success: false,
+        message: '❌ DreamManager не инициализирован. Откройте проект через "Devil: Open Project".',
+      };
+    }
+
+    try {
+      // 1. Проверка блокировки
+      const isLocked = await this.dreamLockManager.isLocked();
+      if (isLocked) {
+        return {
+          success: false,
+          message: '⚠️ Dream уже выполняется. Подождите завершения или удалите файл .devil/.dream.lock вручную.',
+        };
+      }
+
+      // 2. Создание блокировки
+      const acquired = await this.dreamLockManager.acquireLock();
+      if (!acquired) {
+        return {
+          success: false,
+          message: '⚠️ Не удалось получить блокировку. Dream уже выполняется.',
+        };
+      }
+
+      try {
+        // 3. Запуск DreamManager с прогресс-баром
+        const vscode = await import('vscode');
+
+        const report = await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: '🧠 Оптимизация памяти (Dream)...',
+            cancellable: false,
+          },
+          async (progress) => {
+            progress.report({ increment: 0, message: 'Дедупликация узлов...' });
+
+            // Запускаем Dream
+            const dreamReport = await this.dreamManager!.runDream();
+
+            progress.report({ increment: 100, message: 'Завершено' });
+            return dreamReport;
+          }
+        );
+
+        // 4. Формирование отчёта
+        const lines: string[] = [];
+        lines.push('## ✅ Dream завершён\\n');
+        lines.push(`- **Дедуплицировано узлов:** ${report.deduplicatedNodes}`);
+        lines.push(`- **Удалено мёртвых связей:** ${report.removedEdges}`);
+        lines.push(`- **Консолидировано инструкций:** ${report.consolidatedInstructions}`);
+        lines.push(`- **Ошибок валидации:** ${report.validationErrors.length}`);
+        lines.push(`- **Время выполнения:** ${report.duration} мс`);
+
+        if (report.validationErrors.length > 0) {
+          lines.push('\\n### ⚠️ Ошибки валидации:');
+          report.validationErrors.forEach((err, i) => {
+            lines.push(`${i + 1}. ${err}`);
+          });
+        }
+
+        return {
+          success: true,
+          message: lines.join('\\n'),
+          data: report,
+        };
+      } finally {
+        // 5. Освобождение блокировки (всегда, даже при ошибке)
+        await this.dreamLockManager.releaseLock();
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: `Ошибка выполнения Dream: ${errorMessage}`,
+      };
     }
   }
 

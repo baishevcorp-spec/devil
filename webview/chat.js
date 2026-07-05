@@ -426,6 +426,7 @@
       { name: '/whereis', desc: 'Найти все использования символа в проекте' },
       { name: '/semsearch', desc: 'Семантический поиск по памяти' },
       { name: '/memory embeddings build', desc: 'Векторизовать узлы графа' },
+      { name: '/dream', desc: 'Запустить оптимизацию памяти (дедупликация, валидация)' },
       { name: '/memory embeddings rebuild', desc: 'Перестроить embeddings' },
 
       // Генерация
