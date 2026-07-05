@@ -1,47 +1,20 @@
-# Исходники TypeScript (в пакет идёт только скомпилированный JS из out/)
+.vscode/**
+.vscode-test/**
 src/**
 tests/**
-*.ts
-!*.d.ts
-
-# Инструменты разработки
-.eslintrc.json
-.prettierrc
-.prettierignore
-jest.config.js
-tsconfig.json
+**/*.ts
+**/*.map
 .gitignore
-.vscode-test/**
-
-# Бэкапы и временные файлы
+README.md
 backups/**
-*.log
-*.bak
-
-# Данные проекта (не коммитим в расширение)
-.devil/**
-
-# Документация разработки (не пользовательская)
-docs/**
-!README.md
-!CHANGELOG.md
-
-# Git
-.git/**
-.gitignore
-
-# Node modules (vsce сам упакует production-зависимости)
-node_modules/**
+*.vsix
+node_modules/@types/**
+node_modules/.bin/**
+**/*.d.ts
+!node_modules/@xenova/transformers/**
 !node_modules/axios/**
+!node_modules/flexsearch/**
+!node_modules/sql.js/**
 !node_modules/marked/**
 !node_modules/highlight.js/**
-!node_modules/sql.js/**
-!node_modules/flexsearch/**
-
-# Coverage
-coverage/**
-
-# Прочее
-*.map
-.DS_Store
-Thumbs.db
+!node_modules/keytar/**
