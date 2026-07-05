@@ -1713,3 +1713,796 @@ export type ChangeLogAction =
 
 ---
 
+# Готовый файл `docs/ARCHITECTURE.md`
+
+Сохраните этот файл целиком, заменив текущий `docs/ARCHITECTURE.md`:
+
+```bash
+cat > docs/ARCHITECTURE.md <<'ARCH_EOF'
+# Архитектура расширения Devil
+
+## Обзор
+
+Devil — это расширение VS Code, реализующее интеллектуального агента-ассистента для разработчиков с долговременной памятью. Архитектура построена по принципу **разделения ответственности** (Separation of Concerns) и состоит из 6 основных модулей.
+
+**Дата создания:** 2026-06-25
+**Последнее обновление:** 2026-07-05
+**Версия:** 1.2 (с BCK-29: EmbeddingService + Managed Auto-Memory)
+**Статус:** Утверждено
+
+---
+
+## Диаграмма модулей
+
+```mermaid
+graph TB
+    subgraph "Frontend (Webview)"
+        UI[Chat Webview<br/>UI-01..UI-14]
+    end
+
+    subgraph "Backend (Extension Host)"
+        subgraph "Core Layer"
+            EXT[Extension Entry<br/>extension.ts]
+            CMD[Command Handler<br/>BCK-01]
+            CFG[Config Manager<br/>BCK-05]
+        end
+
+        subgraph "Project Layer"
+            PM[Project Manager<br/>BCK-02]
+            FS[File System Service<br/>BCK-03]
+            CTX[Context Builder<br/>BCK-07 + Recall]
+        end
+
+        subgraph "LLM Layer"
+            LLM[LLM Provider<br/>BCK-04]
+            MMM[Multi-Model Manager<br/>BCK-23]
+        end
+
+        subgraph "Memory Layer"
+            MS[Memory Store<br/>BCK-14]
+            GB[Graph Builder<br/>BCK-15 + Extract]
+            UPM[User Profile Manager<br/>BCK-20 + Feedback]
+            DM[Dream Manager<br/>BCK-32]
+            DLM[Dream Lock Manager]
+        end
+
+        subgraph "Analysis Layer"
+            CA[Code Analyzer<br/>BCK-11]
+            GS[Git Service<br/>BCK-17]
+            IDX[Search Index<br/>BCK-27]
+            EMB[Embedding Service<br/>BCK-29]
+        end
+    end
+
+    subgraph "External"
+        LLM_API[LLM API<br/>OpenAI-compatible]
+        GIT[Git CLI]
+        FS_DISK[(File System)]
+        SQLITE[(SQLite DB)]
+        HF[HuggingFace<br/>Model Cache]
+    end
+
+    UI <-->|postMessage| EXT
+    EXT --> CMD
+    CMD --> PM
+    CMD --> LLM
+    CMD --> CA
+    CMD --> GS
+    CMD --> DM
+
+    PM --> FS
+    PM --> CTX
+    PM --> MS
+
+    CTX --> FS
+    CTX --> MS
+    CTX --> UPM
+    CTX --> IDX
+
+    LLM --> LLM_API
+    LLM --> CFG
+    MMM --> LLM
+
+    MS --> SQLITE
+    GB --> MS
+    GB --> FS
+    GB --> LLM
+    UPM --> SQLITE
+    UPM --> LLM
+    DM --> MS
+    DM --> UPM
+    DM --> DLM
+    DLM --> FS_DISK
+
+    CA --> FS
+    GS --> GIT
+    IDX --> FS
+    IDX --> MS
+    IDX --> EMB
+    EMB --> MS
+    EMB --> HF
+
+    FS --> FS_DISK
+```
+
+---
+
+## Описание модулей
+
+### 1. Core Layer (Ядро)
+
+**Ответственность:** Точка входа, регистрация команд, управление конфигурацией.
+
+#### Extension Entry (`extension.ts`)
+- **Задача:** BCK-01
+- **Файл:** `src/extension.ts`
+- **Ответственность:**
+  - Активация расширения
+  - Регистрация команд (`devil.openChat`, `devil.openProject`, `/explain`, `/roadmap`, и т.д.)
+  - Инициализация сервисов (включая `EmbeddingService` в фоне)
+  - Освобождение ресурсов при деактивации
+
+#### Command Handler
+- **Задача:** BCK-01
+- **Файл:** `src/commands/CommandHandler.ts`
+- **Ответственность:**
+  - Маршрутизация команд из чата
+  - Парсинг аргументов команд (`/explain file.ts`, `/whereis App`)
+  - Вызов соответствующих сервисов
+  - Возврат результатов в Webview
+  - Обработка команд Managed Auto-Memory: `/forget`, `/dream`, `/remember`, `/memory export`
+
+#### Config Manager
+- **Задача:** BCK-05
+- **Файл:** `src/services/ConfigManager.ts`
+- **Ответственность:**
+  - Чтение настроек из `vscode.workspace.getConfiguration('devil')`
+  - Управление `baseUrl`, `apiKey`, `model`, `maxRetries`
+  - Подписка на изменения настроек
+  - Валидация конфигурации
+
+**Ключевые методы:**
+```typescript
+class ConfigManager {
+  getBaseUrl(): string;
+  getApiKey(): string;
+  getModel(): string;
+  getMaxRetries(): number;
+  onConfigChanged(callback: () => void): void;
+}
+```
+
+---
+
+### 2. Project Layer (Управление проектом)
+
+**Ответственность:** Управление текущим проектом, сканирование файловой системы, построение контекста.
+
+#### Project Manager
+- **Задача:** BCK-02
+- **Файл:** `src/services/ProjectManager.ts`
+- **Ответственность:**
+  - Хранение текущего `workspaceFolder`
+  - Управление путём к `.devil/`
+  - Сканирование структуры проекта
+  - Отслеживание изменений через `FileSystemWatcher`
+
+**Ключевые методы:**
+```typescript
+class ProjectManager {
+  getCurrentProject(): ProjectInfo;
+  setProject(folder: vscode.WorkspaceFolder): void;
+  getProjectStructure(): FileTree;
+  getDevilPath(): string;
+  onFileChanged(callback: (event: FileChangeEvent) => void): void;
+}
+
+interface ProjectInfo {
+  name: string;
+  path: string;
+  devilPath: string;
+  fileCount: number;
+  structure: FileTree | null;
+}
+```
+
+#### File System Service
+- **Задача:** BCK-03
+- **Файл:** `src/services/FileSystemService.ts`
+- **Ответственность:**
+  - Чтение/запись файлов
+  - Сканирование директорий (рекурсивное)
+  - Исключение `.git`, `node_modules`, `out`, `backups`
+  - Построение дерева файлов
+
+**Ключевые методы:**
+```typescript
+class FileSystemService {
+  readFile(path: string): Promise<string>;
+  writeFile(path: string, content: string): Promise<void>;
+  scanDirectory(rootPath: string, options?: ScanOptions): Promise<FileTree>;
+  fileExists(path: string): Promise<boolean>;
+}
+```
+
+#### Context Builder
+- **Задача:** BCK-07 (+ расширение Recall)
+- **Файл:** `src/services/ContextBuilder.ts`
+- **Ответственность:**
+  - Формирование системного промпта для LLM
+  - Включение структуры проекта, Roadmap, чек-листа
+  - Добавление информации из графовой памяти
+  - Включение профиля пользователя
+  - **Автоматический Recall** релевантной памяти перед каждым запросом к LLM
+
+**Ключевые методы:**
+```typescript
+class ContextBuilder {
+  buildContext(query: string, project: ProjectInfo): Promise<string>;
+  includeProjectStructure(include: boolean): void;
+  includeRoadmap(include: boolean): void;
+  includeMemoryGraph(include: boolean): void;
+  includeUserProfile(include: boolean): void;
+
+  // НОВЫЕ методы для Recall (BCK-26+)
+  recallRelevantMemory(query: string, maxNodes?: number): Promise<GraphNode[]>;
+  buildSmartContext(query: string, project: ProjectInfo): Promise<string>;
+}
+```
+
+---
+
+### 3. LLM Layer (Работа с LLM)
+
+**Ответственность:** Абстракция над LLM API, управление моделями, повторные попытки.
+
+#### LLM Provider
+- **Задача:** BCK-04
+- **Файл:** `src/services/LLMProvider.ts`
+- **Ответственность:**
+  - Отправка запросов к LLM API (OpenAI-совместимый)
+  - Обработка ответов (streaming, non-streaming)
+  - Повторные попытки при ошибках
+  - Логирование запросов/ответов
+
+**Ключевые методы:**
+```typescript
+class LLMProvider {
+  generate(prompt: string, options?: GenerateOptions): Promise<LLMResponse>;
+  generateStream(prompt: string, options?: GenerateOptions): AsyncIterable<string>;
+  setModel(model: string): void;
+  setBaseUrl(url: string): void;
+  setApiKey(key: string): void;
+}
+```
+
+#### Multi-Model Manager
+- **Задача:** BCK-23
+- **Файл:** `src/services/MultiModelManager.ts`
+- **Ответственность:**
+  - Управление несколькими конфигурациями моделей
+  - Переключение между моделями
+  - Назначение моделей для разных задач
+
+---
+
+### 4. Memory Layer (Память и обучение)
+
+**Ответственность:** Графовая память, профиль пользователя, долговременное хранение, фоновая оптимизация.
+
+#### Memory Store
+- **Задача:** BCK-14
+- **Файл:** `src/services/MemoryStore.ts`
+- **Ответственность:**
+  - Инициализация SQLite БД в `.devil/memory.db`
+  - CRUD операции для узлов и связей графа
+  - Поиск узлов по имени, типу, тегам
+  - Поиск связей между узлами
+  - **Управление embeddings узлов** (таблица `node_embeddings`, миграция 003)
+
+**Ключевые методы:**
+```typescript
+class MemoryStore {
+  initialize(dbPath: string): Promise<void>;
+  close(): Promise<void>;
+
+  // Nodes
+  addNode(node: GraphNode): Promise<string>;
+  getNode(id: string): Promise<GraphNode | null>;
+  findNodes(query: NodeQuery): Promise<GraphNode[]>;
+  updateNode(id: string, updates: Partial<GraphNode>): Promise<void>;
+  deleteNode(id: string): Promise<void>;
+
+  // Edges
+  addEdge(edge: GraphEdge): Promise<string>;
+  getEdgesFrom(nodeId: string): Promise<GraphEdge[]>;
+  getEdgesTo(nodeId: string): Promise<GraphEdge[]>;
+  deleteEdge(id: string): Promise<void>;
+
+  // НОВЫЕ методы для embeddings (BCK-29)
+  saveNodeEmbedding(nodeId: string, embedding: Float32Array, model: string, dimensions: number, textHash: string): Promise<string>;
+  getNodeEmbedding(nodeId: string): Promise<NodeEmbedding | null>;
+  deleteNodeEmbedding(nodeId: string): Promise<void>;
+  findNodesWithoutEmbeddings(): Promise<GraphNode[]>;
+  getAllNodeEmbeddings(): Promise<NodeEmbedding[]>;
+}
+
+interface GraphNode {
+  id: string;
+  type: NodeType;
+  name: string;
+  path?: string;
+  metadata?: {
+    line?: number;
+    exported?: boolean;
+    async?: boolean;
+    why?: string;           // НОВОЕ: причина решения
+    how_to_apply?: string;  // НОВОЕ: как применять
+    url?: string;
+    description?: string;
+    last_accessed?: number;
+    source?: string;
+    [key: string]: any;
+  };
+  tags?: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+type NodeType = 'file' | 'class' | 'function' | 'variable' | 'technology' | 'decision' | 'concept' | 'reference';
+
+type ChangeLogAction = 'create' | 'update' | 'delete' | 'scan' | 'generate' | 'extract' | 'dream' | 'recall' | 'forget';
+```
+
+#### Graph Builder
+- **Задача:** BCK-15 (+ расширение Extract)
+- **Файл:** `src/services/GraphBuilder.ts`
+- **Ответственность:**
+  - Парсинг кода (Tree-sitter для TS/JS, RegExp для Python)
+  - Извлечение сущностей (функции, классы, импорты)
+  - Построение связей между сущностями
+  - Инкрементальное обновление графа
+  - **Автоматическое извлечение знаний из диалогов** (Extract по триггерам)
+
+**Ключевые методы:**
+```typescript
+class GraphBuilder {
+  buildFromFile(filePath: string): Promise<GraphUpdate>;
+  buildFromProject(projectPath: string): Promise<GraphUpdate>;
+  updateForFile(filePath: string): Promise<GraphUpdate>;
+  removeFile(filePath: string): Promise<void>;
+
+  // НОВЫЕ методы для Extract
+  extractFromDialog(dialogId: string): Promise<GraphUpdate>;
+  extractFromDecision(text: string, relatedFiles: string[]): Promise<GraphNode>;
+  addMemoryInsight(nodeId: string, why: string, howToApply: string): Promise<void>;
+}
+```
+
+#### User Profile Manager
+- **Задача:** BCK-20 (+ расширение Feedback)
+- **Файл:** `src/services/UserProfileManager.ts`
+- **Ответственность:**
+  - Хранение глобального профиля пользователя
+  - Запись предпочтений (стиль кода, библиотеки, паттерны)
+  - **Автоматическое извлечение `custom_instructions` из диалогов**
+
+**Ключевые методы:**
+```typescript
+class UserProfileManager {
+  getProfile(): Promise<UserProfile>;
+  updateProfile(updates: Partial<UserProfile>): Promise<void>;
+  addPreference(key: string, value: any): Promise<void>;
+  getPreferences(): Promise<Record<string, any>>;
+
+  // НОВЫЕ методы для Feedback
+  extractFeedback(dialogId: string): Promise<string[]>;
+  addCustomInstruction(instruction: string, source: string): Promise<void>;
+  removeCustomInstruction(instruction: string): Promise<void>;
+}
+```
+
+#### Dream Manager (НОВЫЙ)
+- **Задача:** BCK-32
+- **Файл:** `src/services/DreamManager.ts`
+- **Ответственность:**
+  - Дедупликация узлов (объединение похожих по имени + пути)
+  - Удаление мёртвых связей (если файл удалён)
+  - Консолидация `custom_instructions` в `user_profile`
+  - Перестроение индексов SQLite (REINDEX)
+  - Валидация графа (проверка целостности)
+  - Логирование всех операций в `change_log` (action='dream')
+
+**Расписание запуска:**
+| Режим | Триггер | Описание |
+|-------|---------|----------|
+| Автоматический (ежесуточный) | `setInterval` каждые 24 часа | Фоновая задача в Extension Host |
+| Ручной | Команда `/dream` | Запуск по запросу пользователя |
+| Автоматический (по порогу) | >100 изменений в `change_log` за день | Проверка счётчика изменений |
+
+**Ключевые методы:**
+```typescript
+class DreamManager {
+  runDream(): Promise<DreamReport>;
+  deduplicateNodes(): Promise<number>;
+  removeDeadEdges(): Promise<number>;
+  consolidateInstructions(): Promise<number>;
+  rebuildIndexes(): Promise<void>;
+  validateGraph(): Promise<ValidationResult>;
+}
+
+interface DreamReport {
+  deduplicatedNodes: number;
+  removedEdges: number;
+  consolidatedInstructions: number;
+  validationErrors: string[];
+  duration: number;
+  timestamp: number;
+}
+```
+
+#### Dream Lock Manager (НОВЫЙ)
+- **Файл:** `src/services/DreamLockManager.ts`
+- **Ответственность:** Файловая блокировка `.devil/.dream.lock` для предотвращения параллельного запуска Dream.
+
+---
+
+### 5. Analysis Layer (Анализ кода)
+
+**Ответственность:** Анализ кода, Git-интеграция, поиск, линтинг, семантический поиск.
+
+#### Code Analyzer
+- **Задача:** BCK-11
+- **Файл:** `src/services/CodeAnalyzer.ts`
+- **Ответственность:**
+  - Объяснение кода на русском языке
+  - Предложение рефакторинга
+  - Анализ зависимостей
+  - Поиск использования символов
+
+#### Git Service
+- **Задача:** BCK-17
+- **Файл:** `src/services/GitService.ts`
+- **Ответственность:**
+  - Чтение истории коммитов
+  - Получение diff между коммитами
+  - Анализ изменений файла
+  - Интеграция через `child_process` (git CLI)
+
+#### Search Index
+- **Задача:** BCK-27 (+ расширение Embeddings)
+- **Файл:** `src/services/SearchIndex.ts`
+- **Ответственность:**
+  - Построение индекса по содержимому файлов (flexsearch)
+  - Полнотекстовый поиск
+  - **Семантический поиск по узлам графа через embeddings**
+  - Инкрементальное обновление индекса
+
+**Ключевые методы:**
+```typescript
+class SearchIndex {
+  buildIndex(projectPath: string): Promise<void>;
+  searchText(query: string): Promise<SearchResult[]>;
+  searchSemantic(query: string): Promise<SearchResult[]>;
+  updateIndex(filePath: string): Promise<void>;
+  removeFromIndex(filePath: string): Promise<void>;
+
+  // НОВЫЕ методы для работы с embeddings узлов (BCK-29)
+  setSemanticDependencies(embeddingService: EmbeddingService, memoryStore: MemoryStore): void;
+  buildNodeEmbeddings(): Promise<number>;
+  updateNodeEmbedding(nodeId: string): Promise<void>;
+  searchMemory(query: string, topK?: number): Promise<MemorySearchResult[]>;
+  rebuildNodeEmbeddings(): Promise<number>;
+}
+
+interface MemorySearchResult {
+  node: GraphNode;
+  similarity: number;
+  embedding: Float32Array;
+}
+```
+
+#### Embedding Service (НОВЫЙ)
+- **Задача:** BCK-29
+- **Файл:** `src/services/EmbeddingService.ts`
+- **Интерфейс:** `src/interfaces/IEmbeddingService.ts`
+- **Ответственность:**
+  - Загрузка и кэширование ML-модели `Xenova/all-MiniLM-L6-v2` (384 dimensions, ~80MB)
+  - Генерация векторных представлений текста через `@xenova/transformers`
+  - Вычисление косинусного сходства между векторами
+  - Формирование текста для векторизации узлов графа (name + path + why + how_to_apply)
+  - Кэширование модели в `~/.devil/models/`
+
+**Ключевые методы:**
+```typescript
+class EmbeddingService implements IEmbeddingService {
+  initialize(): Promise<void>;
+  generateEmbedding(text: string): Promise<Float32Array>;
+  cosineSimilarity(a: Float32Array, b: Float32Array): number;
+  buildEmbeddingText(node: GraphNode): string;
+}
+```
+
+**Поток данных семантического поиска:**
+```
+User: /semsearch "как реализовать аутентификацию?"
+  → CommandHandler.handleSemSearch()
+  → SearchIndex.searchMemory(query, topK=10)
+  → EmbeddingService.generateEmbedding(query)     // вектор запроса
+  → MemoryStore.getAllNodeEmbeddings()            // все векторы узлов
+  → EmbeddingService.cosineSimilarity() × N       // сравнение с каждым
+  → sort by similarity DESC → slice(0, topK)      // топ результатов
+  → CommandHandler: форматирование Markdown
+  → Webview: отображение результатов
+```
+
+**Технологии:**
+- **Модель:** `Xenova/all-MiniLM-L6-v2` (384 dimensions, ~80MB, квантованная INT8)
+- **Библиотека:** `@xenova/transformers` (локальная генерация embeddings без Python)
+- **Хранилище:** SQLite таблица `node_embeddings` (миграция 003)
+- **Метрика:** Косинусное сходство (cosine similarity)
+
+---
+
+### 6. Frontend Layer (Webview)
+
+**Ответственность:** Чат-интерфейс, отображение результатов, взаимодействие с пользователем.
+
+#### Chat Webview
+- **Задача:** UI-01..UI-14
+- **Файл:** `webview/chat.html`, `webview/chat.js`, `webview/chat.css`
+- **Ответственность:**
+  - Отображение истории сообщений
+  - Поле ввода, кнопка отправки, dropdown команд
+  - Рендеринг Markdown (marked + highlight.js)
+  - Кнопки копирования кода
+  - Обмен сообщениями с расширением (postMessage API)
+
+---
+
+## Потоки данных
+
+### 1. Отправка сообщения в чат
+
+```
+User → Webview (postMessage: userMessage)
+     → Extension (CommandHandler.handleMessage)
+     → ContextBuilder.buildSmartContext (добавляет структуру проекта, память)
+       → ContextBuilder.recallRelevantMemory (поиск релевантных узлов)
+         → MemoryStore.findRelevantNodes (поиск по графу)
+         → SearchIndex.searchMemory (поиск по embeddings)
+         → mergeResults + prioritizeByInsights (лимит 5 узлов)
+     → LLMProvider.generate (отправляет запрос к LLM API с контекстом памяти)
+     → LLM API (возвращает ответ)
+     → CommandHandler (обрабатывает ответ)
+     → Webview (postMessage: agentResponse)
+     → User (видит ответ в чате)
+```
+
+### 2. Сканирование проекта и построение графа
+
+```
+User → Command: devil.openProject
+     → ProjectManager.setProject
+     → FileSystemService.scanDirectory
+     → GraphBuilder.buildFromProject
+       → Парсинг каждого файла (Tree-sitter/RegExp)
+       → Извлечение сущностей (функции, классы, импорты)
+       → MemoryStore.addNode / addEdge
+     → EmbeddingService.initialize (в фоне, не блокирует)
+     → ProjectManager.onFileChanged (подписка на изменения)
+```
+
+### 3. Команда /whereis [symbol]
+
+```
+User → Webview (postMessage: /whereis App)
+     → CommandHandler.parseCommand
+     → MemoryStore.findNodes({ name: 'App', type: 'class' })
+     → MemoryStore.getEdgesTo(nodeId) (находит все связи)
+     → Формирование списка файлов
+     → Webview (postMessage: список файлов с путями)
+     → User (видит список, кликает → открывается файл)
+```
+
+### 4. Семантический поиск /semsearch (НОВЫЙ)
+
+```
+User → Webview (postMessage: /semsearch как реализовать аутентификацию?)
+     → CommandHandler.handleSemSearch
+     → SearchIndex.searchMemory(query, topK=10)
+       → EmbeddingService.generateEmbedding(query)  // вектор запроса
+       → MemoryStore.getAllNodeEmbeddings()          // все векторы узлов
+       → EmbeddingService.cosineSimilarity() × N     // сравнение с каждым
+       → sort by similarity DESC → slice(0, topK)
+     → CommandHandler (форматирование Markdown с оценками сходства)
+     → Webview (postMessage: список релевантных записей)
+     → User (видит топ-10 результатов с оценками)
+```
+
+### 5. Поток Extract (извлечение знаний)
+
+```
+User → Webview (postMessage: "Используем React для UI")
+     → Extension (CommandHandler.handleMessage)
+     → ContextBuilder.buildContext (формирует промпт)
+     → LLMProvider.generate (отправляет запрос к LLM)
+     → LLM API (возвращает анализ диалога)
+     → GraphBuilder.extractFromDialog (извлекает решения)
+       → MemoryStore.addNode (создаёт узел 'decision')
+       → MemoryStore.addEdge (связывает с файлами)
+     → ChangeLog.logChange (action='extract')
+     → Webview (postMessage: "✅ Сохранено в память")
+     → User (видит подтверждение)
+```
+
+### 6. Поток Dream (фоновая интеграция)
+
+```
+Timer (каждые 24 часа) / User (/dream) / Threshold (>100 изменений)
+     → DreamLockManager.acquireLock
+     → DreamManager.runDream
+       → DreamManager.deduplicateNodes
+         → MemoryStore.findNodes (поиск похожих)
+         → MemoryStore.mergeNodes (объединение)
+       → DreamManager.removeDeadEdges
+         → MemoryStore.findOrphanEdges (поиск мёртвых)
+         → MemoryStore.deleteEdge (удаление)
+       → DreamManager.consolidateInstructions
+         → UserProfileManager.getProfile
+         → UserProfileManager.updateProfile (дедупликация)
+       → DreamManager.rebuildIndexes
+         → MemoryStore.executeSql (REINDEX)
+       → DreamManager.validateGraph
+         → MemoryStore.validateIntegrity
+       → ChangeLog.logChange (action='dream', metadata=отчёт)
+     → DreamLockManager.releaseLock
+     → Webview (postMessage: "✅ Dream завершён")
+     → User (видит отчёт)
+```
+
+### 7. Поток Forget (удаление записи)
+
+```
+User → Webview (postMessage: "/forget 550e8400-e29b-41d4-a716-446655440000")
+     → Extension (CommandHandler.handleForget)
+       → MemoryStore.getNode (получение узла)
+       → Проверка на системные узлы
+       → MemoryStore.deleteNode (каскадное удаление связей)
+       → MemoryStore.deleteNodeEmbedding (удаление embedding)
+       → UserProfileManager.removeCustomInstruction (если instruction)
+       → ChangeLog.logChange (action='forget')
+     → Webview (postMessage: "✅ Удалена запись: [название]")
+     → User (видит подтверждение)
+```
+
+---
+
+## Технологический стек
+
+| Компонент | Технология | Обоснование |
+|-----------|-----------|-------------|
+| Расширение VS Code | TypeScript, VS Code API | Нативная интеграция, богатый API |
+| Backend-логика | Node.js (TypeScript) | Единый стек, удобная работа с ФС, HTTP |
+| Хранилище данных | SQLite (sql.js) | Легковесная, встроенная БД, не требует установки |
+| HTTP-клиент | Axios | Простой и надёжный REST-клиент |
+| Парсинг кода | Tree-sitter (WASM) | Быстрый AST-парсинг для TS/JS |
+| Полнотекстовый поиск | flexsearch | Быстрый индекс, поддержка fuzzy search |
+| **Векторизация** | **@xenova/transformers** | **Локальная генерация embeddings (BCK-29)** |
+| **ML-модель** | **Xenova/all-MiniLM-L6-v2** | **384 dimensions, ~80MB, квантованная INT8** |
+| Markdown-рендеринг | marked + highlight.js | Рендеринг Markdown с подсветкой синтаксиса |
+| Тестирование | Jest + ts-jest | Модульное и интеграционное тестирование |
+
+---
+
+## Структура папок
+
+```
+src/
+├── extension.ts              # Точка входа (BCK-01)
+├── commands/
+│   └── CommandHandler.ts     # Обработчик команд (BCK-01) + новые команды
+├── services/
+│   ├── ConfigManager.ts      # Управление конфигурацией (BCK-05)
+│   ├── ProjectManager.ts     # Управление проектом (BCK-02)
+│   ├── FileSystemService.ts  # Работа с файловой системой (BCK-03)
+│   ├── ContextBuilder.ts     # Построение контекста для LLM (BCK-07) + Recall
+│   ├── LLMProvider.ts        # Работа с LLM API (BCK-04)
+│   ├── MultiModelManager.ts  # Управление моделями (BCK-23)
+│   ├── MemoryStore.ts        # Графовая память (BCK-14) + embeddings
+│   ├── GraphBuilder.ts       # Построение графа (BCK-15) + Extract
+│   ├── UserProfileManager.ts # Профиль пользователя (BCK-20) + Feedback
+│   ├── DreamManager.ts       # НОВЫЙ: Фоновая интеграция памяти (BCK-32)
+│   ├── DreamLockManager.ts   # НОВЫЙ: Управление блокировками Dream
+│   ├── EmbeddingService.ts   # НОВЫЙ: Векторизация (BCK-29)
+│   ├── CodeAnalyzer.ts       # Анализ кода (BCK-11)
+│   ├── GitService.ts         # Git-интеграция (BCK-17)
+│   ├── SearchIndex.ts        # Индексация и поиск (BCK-27) + семантический поиск
+│   ├── DevPlanManager.ts     # Менеджер плана разработки (BCK-09.1)
+│   └── DevPlanExecutor.ts    # Исполнитель плана (BCK-09.1)
+├── interfaces/
+│   ├── ILLMProvider.ts       # Контракт для LLM (ARCH-03)
+│   ├── IMemoryStore.ts       # Контракт для памяти (ARCH-03)
+│   ├── IProjectManager.ts    # Контракт для проекта
+│   ├── ISearchIndex.ts       # Контракт для поиска
+│   ├── IDreamManager.ts      # НОВЫЙ: Контракт для DreamManager
+│   ├── IEmbeddingService.ts  # НОВЫЙ: Контракт для EmbeddingService (BCK-29)
+│   └── IDevPlan.ts           # Интерфейсы плана разработки
+└── utils/
+    ├── logger.ts             # Логирование
+    ├── errors.ts             # Кастомные ошибки
+    ├── extractPrompts.ts     # НОВЫЙ: Промпты для Extract
+    └── feedbackPatterns.ts   # НОВЫЙ: Паттерны для извлечения feedback
+
+webview/
+├── chat.html                 # HTML-разметка чата
+├── chat.css                  # Стили чата
+├── chat.js                   # Логика чата (postMessage)
+└── assets/
+    └── icons/                # Иконки для кнопок
+
+tests/
+├── __mocks__/
+│   ├── vscode.js             # Мок VS Code API
+│   └── @xenova/
+│       └── transformers.js   # Мок transformers.js
+├── unit/                     # Модульные тесты
+│   ├── ConfigManager.test.ts
+│   ├── LLMProvider.test.ts
+│   ├── MemoryStore.test.ts
+│   ├── EmbeddingService.test.ts  # НОВЫЙ (BCK-29)
+│   ├── DreamManager.test.ts      # НОВЫЙ
+│   └── SearchIndex.test.ts
+└── integration/              # Интеграционные тесты
+    ├── CommandHandler.test.ts
+    ├── ProjectManager.test.ts
+    ├── SemanticSearch.integration.test.ts      # НОВЫЙ (BCK-29)
+    └── SemSearchCommand.integration.test.ts    # НОВЫЙ (BCK-29)
+
+.devil/                       # Данные проекта (не коммитится)
+├── memory.db                 # SQLite БД графовой памяти (+ node_embeddings)
+├── roadmap.md                # Roadmap проекта
+├── checklist.md              # Чек-лист файлов
+├── dev-plan.json             # План разработки (BCK-09.1)
+├── history.json              # История диалогов
+├── user-profile.json         # Глобальный профиль пользователя
+├── MEMORY.md                 # НОВЫЙ: Экспорт памяти в Markdown
+├── .dream.lock               # НОВЫЙ: Блокировка Dream
+└── references/               # НОВЫЙ: Reference-файлы (BCK-09.1)
+    ├── brand-dna.md
+    └── design-system.md
+
+~/.devil/
+└── models/                   # НОВЫЙ: Кэш ML-моделей
+    └── Xenova--all-MiniLM-L6-v2/
+```
+
+---
+
+## Принципы проектирования
+
+1. **Разделение ответственности:** Каждый модуль отвечает за одну область (проект, LLM, память, анализ).
+2. **Зависимости через интерфейсы:** Модули зависят от абстракций (интерфейсов), а не от конкретных реализаций.
+3. **Асинхронность:** Все операции с ФС, БД, HTTP — асинхронные (`Promise`, `async/await`).
+4. **Обработка ошибок:** Каждый сервис обрабатывает свои ошибки, логирует их, возвращает понятные сообщения.
+5. **Тестируемость:** Каждый модуль можно протестировать изолированно с моками зависимостей.
+6. **Расширяемость:** Новые команды и функции добавляются без изменения существующего кода (Open/Closed Principle).
+7. **Неблокирующая инициализация:** Тяжёлые операции (загрузка ML-модели) выполняются в фоне.
+
+---
+
+## Следующие шаги
+
+1. ✅ **BCK-29:** Реализован EmbeddingService + семантический поиск `/semsearch` (v1.1.0)
+2. ⏳ **BCK-32:** Реализовать `DreamManager` (Sprint 5)
+3. ⏳ **BCK-15+:** Расширить `GraphBuilder` методами Extract
+4. ⏳ **BCK-20+:** Расширить `UserProfileManager` методами Feedback
+5. ⏳ **BCK-26+:** Расширить `ContextBuilder` методами Recall
+6. ⏳ **Новые команды:** `/forget`, `/dream`, `/memory export`, `/remember`
+
+---
+
+**Дата создания:** 2026-06-25
+**Последнее обновление:** 2026-07-05
+**Версия:** 1.2
+**Статус:** Утверждено
