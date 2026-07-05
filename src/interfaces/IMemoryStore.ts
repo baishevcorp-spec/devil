@@ -18,7 +18,7 @@ export type EdgeType =
 
 export type DialogRole = 'user' | 'assistant' | 'system';
 
-export type ChangeAction = 'create' | 'update' | 'delete' | 'scan' | 'generate' | 'lint_error' | 'search_hit';
+export type ChangeAction = 'create' | 'update' | 'delete' | 'scan' | 'generate' | 'lint_error' | 'search_hit' | 'dream' | 'extract' | 'recall' | 'forget';
 
 export interface GraphNode {
   id: string;

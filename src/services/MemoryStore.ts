@@ -968,6 +968,41 @@ export class MemoryStore implements IMemoryStore {
     });
   }
 
+
+  // ========== SQL EXECUTION ==========
+
+  /**
+   * Выполнение произвольного SQL-запроса (для миграций, REINDEX и т.д.)
+   * @param sql - SQL-запрос
+   * @param params - Параметры запроса
+   */
+  executeSql(sql: string, params: (string | number)[] = []): void {
+    if (!this.db) throw new Error('MemoryStore не инициализирован');
+    this.db.run(sql, params);
+    this.save();
+  }
+
+  /**
+   * Получение всех узлов (без фильтрации)
+   */
+  async findAllNodes(): Promise<GraphNode[]> {
+    return await this.findNodes({});
+  }
+
+  /**
+   * Получение всех связей (без фильтрации)
+   */
+  async findAllEdges(): Promise<GraphEdge[]> {
+    return await this.findEdges({});
+  }
+
+  /**
+   * Логирование изменений в change_log
+   */
+  async logChange(entry: Omit<ChangeLogEntry, 'id' | 'created_at'>): Promise<string> {
+    return await this.addChangeLog(entry);
+  }
+
   // ========== MIGRATIONS ==========
 
   async getAppliedMigrations(): Promise<string[]> {
