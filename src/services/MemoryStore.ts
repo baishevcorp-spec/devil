@@ -833,6 +833,141 @@ export class MemoryStore implements IMemoryStore {
     return result[0].values.map((row) => this.rowToChangeLog(columns, row));
   }
 
+  // ========== NODE EMBEDDINGS ==========
+
+  /**
+   * Сохраняет векторное представление узла графа
+   */
+  async saveNodeEmbedding(
+    nodeId: string,
+    embedding: Float32Array,
+    model: string,
+    dimensions: number,
+    textHash: string
+  ): Promise<string> {
+    if (!this.db) throw new Error('MemoryStore не инициализирован');
+
+    const id = this.generateId();
+    const now = Date.now();
+
+    // Конвертируем Float32Array в Buffer для хранения в BLOB
+    const embeddingBuffer = Buffer.from(embedding.buffer);
+
+    // Используем INSERT OR REPLACE для обновления существующей записи
+    this.db.run(
+      `INSERT OR REPLACE INTO node_embeddings
+       (id, node_id, embedding, model, dimensions, text_hash, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, nodeId, embeddingBuffer, model, dimensions, textHash, now]
+    );
+
+    this.save();
+    logger.debug(`Embedding сохранён для узла: ${nodeId}`, 'MemoryStore');
+    return id;
+  }
+
+  /**
+   * Получает векторное представление узла
+   */
+  async getNodeEmbedding(nodeId: string): Promise<{
+    id: string;
+    nodeId: string;
+    embedding: Float32Array;
+    model: string;
+    dimensions: number;
+    textHash: string;
+    createdAt: number;
+  } | null> {
+    if (!this.db) return null;
+
+    const result = this.db.exec('SELECT * FROM node_embeddings WHERE node_id = ?', [nodeId]);
+
+    if (result.length === 0 || result[0].values.length === 0) return null;
+
+    const row = result[0].values[0];
+    const columns = result[0].columns;
+
+    const getValue = (col: string): unknown => row[columns.indexOf(col)];
+
+    // Конвертируем Buffer обратно в Float32Array
+    const embeddingBuffer = getValue('embedding') as Uint8Array;
+    const embedding = new Float32Array(embeddingBuffer.buffer);
+
+    return {
+      id: getValue('id') as string,
+      nodeId: getValue('node_id') as string,
+      embedding,
+      model: getValue('model') as string,
+      dimensions: getValue('dimensions') as number,
+      textHash: getValue('text_hash') as string,
+      createdAt: getValue('created_at') as number,
+    };
+  }
+
+  /**
+   * Удаляет векторное представление узла
+   */
+  async deleteNodeEmbedding(nodeId: string): Promise<void> {
+    if (!this.db) throw new Error('MemoryStore не инициализирован');
+
+    this.db.run('DELETE FROM node_embeddings WHERE node_id = ?', [nodeId]);
+    this.save();
+    logger.debug(`Embedding удалён для узла: ${nodeId}`, 'MemoryStore');
+  }
+
+  /**
+   * Находит все узлы без векторных представлений
+   */
+  async findNodesWithoutEmbeddings(): Promise<GraphNode[]> {
+    if (!this.db) return [];
+
+    const result = this.db.exec(`
+      SELECT n.* FROM nodes n
+      LEFT JOIN node_embeddings ne ON n.id = ne.node_id
+      WHERE ne.node_id IS NULL
+    `);
+
+    if (result.length === 0) return [];
+
+    const nodes = result[0].values.map((row) => this.rowToNode(result[0].columns, row));
+
+    for (const node of nodes) {
+      node.tags = await this.getNodeTags(node.id);
+    }
+
+    return nodes;
+  }
+
+  /**
+   * Получает все embeddings для семантического поиска
+   */
+  async getAllNodeEmbeddings(): Promise<
+    Array<{
+      nodeId: string;
+      embedding: Float32Array;
+      model: string;
+      dimensions: number;
+    }>
+  > {
+    if (!this.db) return [];
+
+    const result = this.db.exec(
+      'SELECT node_id, embedding, model, dimensions FROM node_embeddings'
+    );
+
+    if (result.length === 0) return [];
+
+    return result[0].values.map((row) => {
+      const embeddingBuffer = row[1] as Uint8Array;
+      return {
+        nodeId: row[0] as string,
+        embedding: new Float32Array(embeddingBuffer.buffer),
+        model: row[2] as string,
+        dimensions: row[3] as number,
+      };
+    });
+  }
+
   // ========== MIGRATIONS ==========
 
   async getAppliedMigrations(): Promise<string[]> {
