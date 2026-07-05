@@ -3009,7 +3009,8 @@ export class CommandHandler {
       if (isLocked) {
         return {
           success: false,
-          message: '⚠️ Dream уже выполняется. Подождите завершения или удалите файл .devil/.dream.lock вручную.',
+          message:
+            '⚠️ Dream уже выполняется. Подождите завершения или удалите файл .devil/.dream.lock вручную.',
         };
       }
 
@@ -3045,7 +3046,7 @@ export class CommandHandler {
 
         // 4. Формирование отчёта
         const lines: string[] = [];
-        lines.push('## ✅ Dream завершён\\n');
+        lines.push('## ✅ Dream завершён\n');
         lines.push(`- **Дедуплицировано узлов:** ${report.deduplicatedNodes}`);
         lines.push(`- **Удалено мёртвых связей:** ${report.removedEdges}`);
         lines.push(`- **Консолидировано инструкций:** ${report.consolidatedInstructions}`);
@@ -3053,7 +3054,7 @@ export class CommandHandler {
         lines.push(`- **Время выполнения:** ${report.duration} мс`);
 
         if (report.validationErrors.length > 0) {
-          lines.push('\\n### ⚠️ Ошибки валидации:');
+          lines.push('\n### ⚠️ Ошибки валидации:');
           report.validationErrors.forEach((err, i) => {
             lines.push(`${i + 1}. ${err}`);
           });
@@ -3061,7 +3062,7 @@ export class CommandHandler {
 
         return {
           success: true,
-          message: lines.join('\\n'),
+          message: lines.join('\n'),
           data: report,
         };
       } finally {
